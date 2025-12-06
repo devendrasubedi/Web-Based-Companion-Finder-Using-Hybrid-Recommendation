@@ -1,17 +1,69 @@
-import { useState } from 'react'
-import './App.css'
-import NavBar from './component/NavBar'
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import AuthPage from "./pages/LoginSignup";
+// import HomePage from "./pages/HomePage";
+// import About from "./pages/About";
+// import Contact from "./pages/Contact";
+// import Explore from "./pages/Explore";
+// import ProtectedRoute from "./ProtectedRoute";
+import { useState } from "react";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   return (
-    <>
-     <div className="container border-4">hello</div>
-     <NavBar />
-     
-    </>
-  )
-}
+    <BrowserRouter>
+      <Routes>
 
-export default App
+        {/* LOGIN / SIGNUP PAGE */}
+        <Route
+          path="/"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/home" />
+            ) : (
+              <AuthPage setIsAuthenticated={setIsAuthenticated} />
+            )
+          }
+        />
+
+        {/* ALL OTHER PAGES ARE PROTECTED
+        <Route
+          path="/home"
+          element={
+            <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <HomePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/about"
+          element={
+            <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <About />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/contact"
+          element={
+            <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <Contact />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/explore"
+          element={
+            <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <Explore />
+            </ProtectedRoute>
+          }
+        /> */}
+
+      </Routes>
+    </BrowserRouter>
+  );
+}
