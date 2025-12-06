@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import AuthPage from "./pages/LoginSignup";
+import LoginSignup from "./pages/LoginSignup";
 // import HomePage from "./pages/HomePage";
 // import About from "./pages/About";
 // import Contact from "./pages/Contact";
@@ -19,9 +19,9 @@ export default function App() {
           path="/"
           element={
             isAuthenticated ? (
-              <Navigate to="/home" />
+              <Navigate to="/Home" />
             ) : (
-              <AuthPage setIsAuthenticated={setIsAuthenticated} />
+              <LoginSignup setIsAuthenticated={setIsAuthenticated} />
             )
           }
         />
