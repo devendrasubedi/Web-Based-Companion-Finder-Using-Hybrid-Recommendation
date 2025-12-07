@@ -1,14 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LoginSignup from "./pages/LoginSignup";
-// import HomePage from "./pages/HomePage";
-// import About from "./pages/About";
-// import Contact from "./pages/Contact";
-// import Explore from "./pages/Explore";
-// import ProtectedRoute from "./ProtectedRoute";
+import Preferences from "./pages/Preferences"; 
+import HomePage from "./pages/HomePage";
 import { useState } from "react";
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [routeAfterAuth, setRouteAfterAuth] = useState(null);
 
   return (
     <BrowserRouter>
@@ -18,50 +15,23 @@ export default function App() {
         <Route
           path="/"
           element={
-            isAuthenticated ? (
-              <Navigate to="/Home" />
+            routeAfterAuth ? (
+              <Navigate to={routeAfterAuth} />
             ) : (
-              <LoginSignup setIsAuthenticated={setIsAuthenticated} />
+              <LoginSignup
+                onLogin={() => setRouteAfterAuth("/home")}
+                onSignup={() => setRouteAfterAuth("/preferences")}
+              />
             )
           }
         />
+        
 
-        {/* ALL OTHER PAGES ARE PROTECTED
-        <Route
-          path="/home"
-          element={
-            <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <HomePage />
-            </ProtectedRoute>
-          }
-        />
+        {/* HOMEPAGE */}
+        <Route path="/home" element={<HomePage />} />
 
-        <Route
-          path="/about"
-          element={
-            <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <About />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/contact"
-          element={
-            <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <Contact />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/explore"
-          element={
-            <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <Explore />
-            </ProtectedRoute>
-          }
-        /> */}
+        {/* PREFERENCES (INTEREST SELECTION PAGE) */}
+        <Route path="/preferences" element={<Preferences />} />
 
       </Routes>
     </BrowserRouter>
