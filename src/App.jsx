@@ -1,14 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LoginSignup from "./pages/LoginSignup";
-// import HomePage from "./pages/HomePage";
+import Home from "./pages/Home";
 // import About from "./pages/About";
 // import Contact from "./pages/Contact";
 // import Explore from "./pages/Explore";
-// import ProtectedRoute from "./ProtectedRoute";
+import ProtectedRoute from "./ProtectedRoute";
 import { useState } from "react";
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
 
   return (
     <BrowserRouter>
@@ -26,17 +26,17 @@ export default function App() {
           }
         />
 
-        {/* ALL OTHER PAGES ARE PROTECTED
+        ALL OTHER PAGES ARE PROTECTED
         <Route
-          path="/home"
+          path="/Home"
           element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <HomePage />
+              <Home />
             </ProtectedRoute>
           }
         />
 
-        <Route
+        {/* <Route
           path="/about"
           element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>

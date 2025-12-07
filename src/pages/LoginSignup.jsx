@@ -87,7 +87,7 @@ const LoginSignup = ({ onLogin, onSignup }) => {
           <div className="inline-flex items-center justify-center w-20 h-20 bg-white shadow-2xl rounded-full mb-4">
             <Mountain className="w-10 h-10 text-green-800 drop-shadow-lg" />
           </div>
-          <h1 className="text-white text-3xl drop-shadow-lg font-semibold">Nepal Trekking</h1>
+          <h1 className="text-white text-3xl drop-shadow-lg font-semibold">TrekMate</h1>
           <p className="text-white/90 drop-shadow-md">Find your perfect hiking companion</p>
         </div>
 
