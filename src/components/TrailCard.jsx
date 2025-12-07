@@ -1,6 +1,6 @@
 import React from 'react';
 import { Clock, TrendingUp, Star, MapPin } from 'lucide-react';
-import ImageWithFallback from './ImageWithFallback';
+import ImageWithFallback from './ImageWithFallBack';
 
 const TrailCard = ({ trail, onClick }) => {
   if (!trail) return null;

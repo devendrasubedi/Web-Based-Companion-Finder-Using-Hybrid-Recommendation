@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Search, Mountain } from 'lucide-react';
-import ImageWithFallback from '../components/ImageWithFallback';
+import ImageWithFallback from '../components/ImageWithFallBack';
 import TrailCard from '../components/TrailCard'; 
 import ProfileCard from '../components/ProfileCard';
 import { mockTrails, mockUsers } from '../data/mockData';
