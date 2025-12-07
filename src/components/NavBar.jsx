@@ -6,8 +6,16 @@ const NavBar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
 
-  // Helper to check active state
-  const isActive = (path) => location.pathname === path ? "text-green-700 font-semibold" : "text-gray-600 hover:text-green-600";
+  // Helper to check active state with box styling
+  const isActive = (path) => {
+    const baseStyles = "px-4 py-2 rounded-lg transition-all duration-300 text-sm font-medium";
+    const activeStyles = "bg-green-50 text-green-700 font-semibold shadow-sm";
+    const inactiveStyles = "text-gray-600 hover:text-green-700 hover:bg-green-50 hover:scale-105 hover:shadow-md";
+    
+    return location.pathname === path 
+      ? `${baseStyles} ${activeStyles}`
+      : `${baseStyles} ${inactiveStyles}`;
+  };
 
   return (
     <nav className="bg-white/95 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-50">
@@ -21,11 +29,11 @@ const NavBar = () => {
           </div>
 
           {/* Desktop Menu */}
-          <div className="hidden md:flex items-center space-x-8">
-            <Link to="/" className={`${isActive('/')} transition-colors text-sm font-medium`}>Home</Link>
-            <Link to="/explore" className={`${isActive('/explore')} transition-colors text-sm font-medium`}>Explore</Link>
-            <Link to="/groups" className={`${isActive('/groups')} transition-colors text-sm font-medium`}>Groups</Link>
-            <Link to="/messages" className={`${isActive('/messages')} transition-colors text-sm font-medium flex items-center gap-1`}>
+          <div className="hidden md:flex items-center space-x-2">
+            <Link to="/" className={isActive('/')}>Home</Link>
+            <Link to="/explore" className={isActive('/explore')}>Explore</Link>
+            <Link to="/groups" className={isActive('/groups')}>Groups</Link>
+            <Link to="/messages" className={`${isActive('/messages')} flex items-center gap-1`}>
               Messages
             </Link>
             
