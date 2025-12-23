@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import TrailCard from '../components/TrailCard'; 
+import { useState, useEffect } from 'react';
+import TrailCard from '../components/TrailCard';
 import { mockTrails } from '../data/mockData';
 import { Search, X, SlidersHorizontal, MapPin, Calendar, Wallet, Mountain, Frown } from 'lucide-react';
 
@@ -13,13 +13,13 @@ const ExploreSearchPage = ({ onNavigate }) => {
 
   // 1. Provinces of Nepal
   const provinces = [
-    'All', 
-    'Koshi', 
-    'Madhesh', 
-    'Bagmati', 
-    'Gandaki', 
-    'Lumbini', 
-    'Karnali', 
+    'All',
+    'Koshi',
+    'Madhesh',
+    'Bagmati',
+    'Gandaki',
+    'Lumbini',
+    'Karnali',
     'Sudurpaschim'
   ];
 
@@ -32,23 +32,30 @@ const ExploreSearchPage = ({ onNavigate }) => {
   // Filter Logic
   const filteredTrails = mockTrails.filter(trail => {
     // Search
-    const matchesSearch = !searchQuery || 
+    const matchesSearch = !searchQuery ||
       trail.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (trail.region && trail.region.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (trail.description && trail.description.toLowerCase().includes(searchQuery.toLowerCase()));
 
     // Province
-    const matchesProvince = selectedProvince === 'All' || 
-      (trail.province === selectedProvince) || 
+    const matchesProvince = selectedProvince === 'All' ||
+      (trail.province === selectedProvince) ||
       (trail.region && trail.region.includes(selectedProvince));
 
     // Difficulty
-    const matchesDifficulty = selectedDifficulty === 'All' || trail.difficulty === selectedDifficulty;
+    const matchesDifficulty = selectedDifficulty === 'All' || trail.difficulty.toLowerCase() === selectedDifficulty.toLowerCase();
 
-    // Days
     const matchesDays = selectedDays === 'All' || 
-       (trail.duration && trail.duration === selectedDays) ||
-       (trail.duration && trail.duration.includes(selectedDays.split(' ')[0])); 
+      (trail.duration && (() => {
+        const days = trail.duration.charAt(0) === '>' ? parseInt(trail.duration.slice(2)) : parseInt(trail.duration);
+        if (selectedDays === '1-5 days') return days >= 1 && days <= 5;
+        if (selectedDays === '5-10 days') return days > 5 && days <= 10;
+        if (selectedDays === '10-15 days') return days > 10 && days <= 15;
+        if (selectedDays === '15-20 days') return days > 15 && days <= 20;
+        if (selectedDays === '20+ days') return days > 20;
+        return false;
+      })());
+
 
     // Budget Logic
     let matchesBudget = true;
@@ -56,9 +63,9 @@ const ExploreSearchPage = ({ onNavigate }) => {
       const priceString = String(trail.price || trail.cost || '0').replace(/[^0-9.]/g, '');
       const price = parseFloat(priceString);
 
-      if (selectedBudget === 'Low') matchesBudget = price < 500;       
-      else if (selectedBudget === 'Medium') matchesBudget = price >= 500 && price <= 1500; 
-      else if (selectedBudget === 'High') matchesBudget = price > 1500; 
+      if (selectedBudget === 'Low') matchesBudget = price < 500;
+      else if (selectedBudget === 'Medium') matchesBudget = price >= 500 && price <= 1500;
+      else if (selectedBudget === 'High') matchesBudget = price > 1500;
     }
 
     return matchesSearch && matchesProvince && matchesDifficulty && matchesDays && matchesBudget;
@@ -76,11 +83,11 @@ const ExploreSearchPage = ({ onNavigate }) => {
   return (
     <div className="min-h-screen pt-24 pb-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
+
         {/* Header & Search */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-6">Explore Trails</h1>
-          
+
           <div className="sticky top-20 z-10 bg-white/95 backdrop-blur-sm py-4 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-6 shadow-sm">
             <div className="max-w-3xl flex gap-4">
               <div className="relative flex-1">
@@ -101,14 +108,13 @@ const ExploreSearchPage = ({ onNavigate }) => {
                   </button>
                 )}
               </div>
-              
+
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-6 py-3 border rounded-xl font-medium transition-all ${
-                  showFilters || hasActiveFilters
-                    ? 'border-primary bg-primary/5 text-primary' 
-                    : 'border-gray-200 bg-white text-gray-700 hover:border-primary/50'
-                }`}
+                className={`flex items-center gap-2 px-6 py-3 border rounded-xl font-medium transition-all ${showFilters || hasActiveFilters
+                  ? 'border-primary bg-primary/5 text-primary'
+                  : 'border-gray-200 bg-white text-gray-700 hover:border-primary/50'
+                  }`}
               >
                 <SlidersHorizontal className="w-5 h-5" />
                 <span className="hidden sm:inline">Filters</span>
@@ -135,7 +141,7 @@ const ExploreSearchPage = ({ onNavigate }) => {
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                   <MapPin className="w-4 h-4" /> Province
                 </label>
-                <select 
+                <select
                   value={selectedProvince}
                   onChange={(e) => setSelectedProvince(e.target.value)}
                   className="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
@@ -154,9 +160,8 @@ const ExploreSearchPage = ({ onNavigate }) => {
                     <button
                       key={opt}
                       onClick={() => setSelectedDifficulty(opt)}
-                      className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${
-                        selectedDifficulty === opt ? 'bg-primary text-white border-primary' : 'bg-white border-gray-200 hover:border-primary/50'
-                      }`}
+                      className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${selectedDifficulty === opt ? 'bg-primary text-white border-primary' : 'bg-white border-gray-200 hover:border-primary/50'
+                        }`}
                     >
                       {opt}
                     </button>
@@ -169,7 +174,7 @@ const ExploreSearchPage = ({ onNavigate }) => {
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                   <Calendar className="w-4 h-4" /> Days
                 </label>
-                <select 
+                <select
                   value={selectedDays}
                   onChange={(e) => setSelectedDays(e.target.value)}
                   className="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
@@ -188,9 +193,8 @@ const ExploreSearchPage = ({ onNavigate }) => {
                     <button
                       key={b}
                       onClick={() => setSelectedBudget(b)}
-                      className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${
-                        selectedBudget === b ? 'bg-primary text-white border-primary' : 'bg-white border-gray-200 hover:border-primary/50'
-                      }`}
+                      className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${selectedBudget === b ? 'bg-primary text-white border-primary' : 'bg-white border-gray-200 hover:border-primary/50'
+                        }`}
                     >
                       {b}
                     </button>
@@ -226,9 +230,9 @@ const ExploreSearchPage = ({ onNavigate }) => {
             <p className="text-gray-500 mb-6 max-w-md mx-auto">
               We couldn't find any trails matching your current filters. Try adjusting your criteria or clearing some filters.
             </p>
-            <button 
-                onClick={clearFilters} 
-                className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-colors"
+            <button
+              onClick={clearFilters}
+              className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-colors"
             >
               Clear all filters
             </button>
