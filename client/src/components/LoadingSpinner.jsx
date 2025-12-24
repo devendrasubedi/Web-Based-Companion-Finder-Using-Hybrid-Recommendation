@@ -1,16 +1,19 @@
 import { motion } from "framer-motion";
 
-const LoadingSpinner = () => {
-    return (
-        <div className='min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-emerald-900 flex items-center justify-center relative overflow-hidden'>
-            {/* Simple Loading Spinner */}
-            <motion.div
-                className='w-16 h-16 border-4 border-t-4 border-t-green-500 border-green-200 rounded-full'
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            />
-        </div>
-    );
+const LoadingSpinner = ({ size = "md" }) => {
+	const sizeClasses = {
+		sm: "w-5 h-5 border-2",
+		md: "w-8 h-8 border-4",
+		lg: "w-16 h-16 border-4"
+	};
+
+	return (
+		<motion.div
+			className={`${sizeClasses[size]} border-current border-t-transparent rounded-full`}
+			animate={{ rotate: 360 }}
+			transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+		/>
+	);
 };
 
 export default LoadingSpinner;

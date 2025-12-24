@@ -1,18 +1,18 @@
 import React, { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { mockTrails } from '../data/mockData';
-import { 
-  MapPin, Star, Heart, Navigation, Calendar, Ruler, 
-  TrendingUp, DollarSign, Home, 
+import {
+  MapPin, Star, Heart, Navigation, Calendar, Ruler,
+  TrendingUp, DollarSign, Home,
   User, ArrowRight, ArrowLeft
 } from 'lucide-react';
 
 const TrailDetails = () => {
   // --- 1. ROUTING & STATE ---
-  const { id } = useParams(); 
+  const { id } = useParams();
   const navigate = useNavigate();
   const [isFavorite, setIsFavorite] = useState(false);
-  
+
   // Ref for map scrolling
   const mapSectionRef = useRef(null);
 
@@ -55,10 +55,10 @@ const TrailDetails = () => {
 
   return (
     <div className="min-h-screen bg-background pb-12 pt-4">
-      <div className="w-[95%] max-w-5xl mx-auto">
-        
+      <div className="w-full px-4 sm:px-6 lg:px-8">
+
         {/* Back Button */}
-        <button 
+        <button
           onClick={() => navigate(-1)}
           className="mb-3 flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm"
         >
@@ -76,7 +76,7 @@ const TrailDetails = () => {
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-            
+
             <div className="absolute bottom-0 left-0 right-0 p-6">
               <h1 className="text-white text-2xl md:text-3xl font-bold mb-2 drop-shadow-md">
                 {trail.name}
@@ -115,7 +115,7 @@ const TrailDetails = () => {
 
             {tags.length > 0 && (
               <div className="mb-5 flex flex-wrap gap-2">
-                 {tags.map((tag, idx) => (
+                {tags.map((tag, idx) => (
                   <span key={idx} className="text-muted-foreground text-xs bg-secondary/10 px-2.5 py-1 rounded-md">
                     {tag}
                   </span>
@@ -127,15 +127,14 @@ const TrailDetails = () => {
               {/* BACKEND TODO: Connect to User Favorites API */}
               <button
                 onClick={() => setIsFavorite(!isFavorite)}
-                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-                  isFavorite ? 'bg-primary text-white' : 'bg-white border border-border hover:bg-gray-50'
-                }`}
+                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all ${isFavorite ? 'bg-primary text-white' : 'bg-white border border-border hover:bg-gray-50'
+                  }`}
               >
                 <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
                 {isFavorite ? 'Saved' : 'Save'}
               </button>
-              
-              <button 
+
+              <button
                 onClick={scrollToMap}
                 className="flex-1 py-2.5 px-4 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 flex items-center justify-center gap-2 transition-all"
               >
@@ -150,14 +149,14 @@ const TrailDetails = () => {
         <div className="bg-white rounded-xl shadow-sm border border-border p-5 mb-6">
           <h2 className="text-foreground text-lg font-bold mb-4">Trail Details</h2>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            
+
             {/* Helper Component for Stats to reduce code repetition */}
             <StatItem icon={Calendar} label="Duration" value={trail.duration} />
             <StatItem icon={Ruler} label="Distance" value={trail.distanceKm ? `${trail.distanceKm} km` : 'N/A'} />
             <StatItem icon={TrendingUp} label="Max Altitude" value={trail.maxAltitude ? `${trail.maxAltitude.toLocaleString()} m` : 'N/A'} />
             <StatItem icon={DollarSign} label="Est. Cost" value={trail.price ? `$${trail.price}` : 'Contact us'} />
             <StatItem icon={Home} label="Accommodation" value={trail.accommodationType || 'Teahouse'} />
-            
+
           </div>
         </div>
 
@@ -167,7 +166,7 @@ const TrailDetails = () => {
           <p className="text-muted-foreground leading-relaxed text-sm md:text-base mb-6">
             {trail.description || "No description available."}
           </p>
-          
+
           {displayImages.length > 1 && (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {displayImages.slice(1, 5).map((img, index) => (
@@ -186,7 +185,7 @@ const TrailDetails = () => {
         {/* --- SECTION 4: MAP (Kept Large as Requested) --- */}
         <div ref={mapSectionRef} className="bg-white rounded-xl shadow-sm border border-border p-5 mb-6">
           <h2 className="text-foreground text-lg font-bold mb-4">Interactive Map</h2>
-          
+
           {/* BACKEND TODO: Insert Google Maps / Leaflet Component Here */}
           <div className="w-full h-[50vh] min-h-[350px] bg-muted/20 rounded-lg flex items-center justify-center border-2 border-dashed border-border">
             <div className="text-center">

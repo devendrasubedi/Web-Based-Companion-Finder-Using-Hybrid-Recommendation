@@ -8,10 +8,10 @@ const ProfileCard = ({ user, onClick, showAddButton = true }) => {
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-200 p-5 min-w-[280px]"
+      className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-200 p-4 min-w-[260px] w-full"
     >
-      <div className="flex items-start gap-4">
-        <div className="w-16 h-16 bg-linear-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center flex-shrink-0">
+      <div className="flex items-center gap-3">
+        <div className="w-[15%] min-w-[50px] max-w-[60px] aspect-square bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center flex-shrink-0">
           {user.profileImage ? (
             <img src={user.profileImage} alt={user.name} className="w-full h-full rounded-full object-cover" />
           ) : (

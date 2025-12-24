@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { mockUsers } from '../data/mockData';
-import { MapPin, Languages, Edit2, Mountain, Bookmark, Award } from 'lucide-react';
+import { MapPin, Languages, Edit2, Mountain, Bookmark, Award, LogOut } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
 
 function ProfilePage({ userId, currentUserEmail }) {
   const [isEditing, setIsEditing] = useState(false);
-  
+  const { logout } = useAuthStore();
+
   // Find the user or fallback to the first mock user
   const user = userId ? mockUsers.find(u => u.id === userId) : mockUsers[0];
   const isOwnProfile = !userId || user?.email === currentUserEmail;
@@ -27,11 +29,19 @@ function ProfilePage({ userId, currentUserEmail }) {
     setIsEditing(false);
   };
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
   return (
     // Main container with a subtle background color from theme
     <div className="min-h-screen pt-8 pb-12 bg-muted/20">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        
+      <div className="w-full px-4 sm:px-6 lg:px-8 space-y-6">
+
         {/* 1. Profile Header Card */}
         <div className="bg-card rounded-2xl shadow-sm border border-border p-8">
           <div className="flex flex-col md:flex-row gap-8 items-start">
@@ -90,15 +100,24 @@ function ProfilePage({ userId, currentUserEmail }) {
                   </div>
                 </div>
 
-                {/* Edit Button */}
+                {/* Actions Buttons */}
                 {isOwnProfile && (
-                  <button
-                    onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-                    className="flex-shrink-0 flex items-center gap-2 px-5 py-2 bg-primary text-primary-foreground rounded-full text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    {isEditing ? 'Save' : 'Edit Profile'}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+                      className="flex-shrink-0 flex items-center gap-2 px-5 py-2 bg-primary text-primary-foreground rounded-full text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      {isEditing ? 'Save' : 'Edit Profile'}
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="flex-shrink-0 flex items-center gap-2 px-5 py-2 bg-destructive text-destructive-foreground rounded-full text-sm font-medium hover:bg-destructive/90 transition-colors shadow-sm"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Logout
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -112,7 +131,7 @@ function ProfilePage({ userId, currentUserEmail }) {
               <Award className="w-5 h-5 text-primary" />
               Trekking Preferences
             </h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-8 gap-x-12 mb-8">
               <div>
                 <p className="text-muted-foreground text-sm mb-1.5 uppercase tracking-wide font-medium">Experience Level</p>
@@ -145,7 +164,7 @@ function ProfilePage({ userId, currentUserEmail }) {
         {/* 3. Hiking Activity Card */}
         <div className="bg-card rounded-2xl shadow-sm border border-border p-8">
           <h2 className="text-lg font-semibold text-foreground mb-6">Hiking Activity</h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
             {/* Completed Treks */}
             <div>
@@ -166,7 +185,7 @@ function ProfilePage({ userId, currentUserEmail }) {
                 <p className="text-muted-foreground text-sm italic">No completed treks yet</p>
               )}
             </div>
-            
+
             {/* Saved Trails */}
             <div>
               <div className="flex items-center gap-2 mb-4">

@@ -1,125 +1,216 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  Mountain,
-  Landmark,
-  Leaf,
-  Coffee,
-  SunMoon
-} from "lucide-react";
+import { useState } from 'react';
+import { Mountain, Star, Heart, Home, Sparkles, Loader, CheckCircle2 } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 
-const categories = [
-  {
-    name: "Adventure",
-    icon: <Mountain className="w-6 h-6 text-primary" />,
-    color: "bg-primary/10", 
-    subtags: ["high-altitude", "challenging", "remote", "camping", "offbeat"]
+const interestCategories = {
+  adventure: {
+    name: 'Adventure',
+    icon: Mountain,
+    description: "High-altitude, Challenging, Remote, Camping, Offbeat"
   },
-  {
-    name: "Cultural",
-    icon: <Landmark className="w-6 h-6 text-secondary" />,
-    color: "bg-secondary/10",
-    subtags: ["heritage", "pilgrimage", "cultural", "traditional-villages", "monasteries"]
+  cultural: {
+    name: 'Cultural',
+    icon: Star,
+    description: "Heritage, Pilgrimage, Cultural, Traditional Villages, Monasteries"
   },
-  {
-    name: "Nature",
-    icon: <Leaf className="w-6 h-6 text-muted-foreground" />,
-    color: "bg-muted/30",
-    subtags: ["scenic", "wildlife", "photography", "lakes", "waterfalls", "forests"]
+  nature: {
+    name: 'Nature',
+    icon: Heart,
+    description: "Scenic, Wildlife, Photography, Lakes, Waterfalls, Forests"
   },
-  {
-    name: "Comfort",
-    icon: <Coffee className="w-6 h-6 text-accent" />,
-    color: "bg-accent/10",
-    subtags: ["tea-house", "easy", "family-friendly", "short-trek"]
+  comfort: {
+    name: 'Comfort',
+    icon: Home,
+    description: "Tea-house, Easy, Family-friendly, Short-trek"
   },
-  {
-    name: "Spiritual",
-    icon: <SunMoon className="w-6 h-6 text-[#A67B5B]" />, 
-    color: "bg-[#A67B5B]/10",
-    subtags: ["pilgrimage", "meditation", "religious", "peace"]
+  spiritual: {
+    name: 'Spiritual',
+    icon: Sparkles,
+    description: "Pilgrimage, Meditation, Religious, Peace"
   }
-];
+};
 
 const PreferencesPage = () => {
+  const { user, savePreferences, isLoading } = useAuthStore();
   const navigate = useNavigate();
-  const [selectedCategories, setSelectedCategories] = useState([]);
 
-  const toggleCategory = (name) => {
-    if (selectedCategories.includes(name)) {
-      setSelectedCategories(selectedCategories.filter(c => c !== name));
+  const [preferences, setPreferences] = useState({
+    interests: [],
+    experienceLevel: 'Beginner',
+    availability: 'Weekends',
+    budget: 'Medium',
+    languagesKnown: []
+  });
+
+  const toggleInterest = (interest) => {
+    if (preferences.interests.includes(interest)) {
+      setPreferences({
+        ...preferences,
+        interests: preferences.interests.filter(i => i !== interest)
+      });
     } else {
-      setSelectedCategories([...selectedCategories, name]);
+      setPreferences({
+        ...preferences,
+        interests: [...preferences.interests, interest]
+      });
     }
   };
 
-  const handleSubmit = () => {
-    // Navigate to homepage
-    navigate("/home");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await savePreferences({
+        interests: preferences.interests,
+        experienceLevel: preferences.experienceLevel,
+        availability: preferences.availability,
+        budget: preferences.budget,
+        languagesKnown: preferences.languagesKnown
+      });
+      navigate('/');
+    } catch (error) {
+      console.error("Failed to save preferences", error);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-background p-6 font-sans">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-center mb-2 text-foreground">Select Your Interests</h1>
-        <p className="text-center text-muted-foreground mb-8">Choose what defines your ideal trekking experience.</p>
+    <div className="min-h-screen pt-24 pb-12 px-4 bg-gradient-to-br from-primary via-secondary to-accent relative overflow-hidden flex items-center justify-center">
+      {/* Decorative Elements matching Auth Pages */}
+      <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+        <div className="absolute top-20 left-10 w-72 h-72 bg-white rounded-full blur-3xl" />
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-white rounded-full blur-3xl" />
+      </div>
 
-        {/* Categories */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {categories.map((cat) => {
-            const isSelected = selectedCategories.includes(cat.name);
-            return (
-              <div
-                key={cat.name}
-                className={`border rounded-xl p-5 cursor-pointer transition-all duration-200 shadow-sm
-                ${isSelected
-                  // Active state: Much darker green background (25% opacity)
-                  ? "bg-primary/25 border-primary ring-1 ring-primary"
-                  // Inactive state
-                  : "bg-card border-border hover:border-primary/50 hover:shadow-md"
-                }`}
-                onClick={() => toggleCategory(cat.name)}
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  {/* Icon container */}
-                  <div className={`p-2 rounded-lg ${isSelected ? 'bg-white/40' : cat.color}`}>
-                    {cat.icon}
-                  </div>
-                  <h2 className={`text-xl font-bold ${isSelected ? 'text-foreground' : 'text-foreground'}`}>
-                    {cat.name}
-                  </h2>
-                </div>
-
-                {/* Subtags - Static, visual only */}
-                <div className="flex flex-wrap gap-2">
-                  {cat.subtags.map((sub) => (
-                    <span
-                      key={sub}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border
-                        ${isSelected
-                          // When box is selected: White semi-transparent tags
-                          ? "bg-white/50 text-foreground border-white/20"
-                          // When box is NOT selected: Standard muted tags
-                          : "bg-muted text-muted-foreground border-transparent"
-                        }`}
-                    >
-                      {sub}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+      <div className="w-full max-w-4xl relative z-10">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2 drop-shadow-md">Welcome, {user?.name}!</h1>
+          <p className="text-emerald-100 drop-shadow-sm">Customize your trekking experience</p>
         </div>
 
-        <button
-          onClick={handleSubmit}
-          className="mt-8 w-full bg-primary text-primary-foreground py-4 rounded-xl text-lg font-bold hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+        <motion.form
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          onSubmit={handleSubmit}
+          className="space-y-6"
         >
-          Save & Continue
-        </button>
+          {/* Interest Categories Card */}
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl p-6 md:p-8 border border-white/20">
+            <h2 className="text-gray-800 text-xl font-bold mb-6 text-center">What brings you to the mountains?</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.entries(interestCategories).map(([key, category]) => {
+                const Icon = category.icon;
+                const isSelected = preferences.interests.includes(key);
+                return (
+                  <motion.button
+                    key={key}
+                    type="button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => toggleInterest(key)}
+                    className={`relative flex flex-col items-start text-left p-5 rounded-xl border-2 transition-all duration-200 h-full ${isSelected
+                      ? 'border-emerald-500 bg-emerald-50/50 shadow-md'
+                      : 'border-transparent bg-gray-50 hover:bg-emerald-50/30 hover:border-emerald-200'
+                      }`}
+                  >
+                    <div className={`p-3 rounded-lg mb-3 ${isSelected ? 'bg-emerald-500 text-white' : 'bg-white text-emerald-600 shadow-sm'}`}>
+                      <Icon className="w-6 h-6" />
+                    </div>
+                    <h3 className={`font-bold text-lg mb-1 ${isSelected ? 'text-emerald-900' : 'text-gray-800'}`}>{category.name}</h3>
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      {category.description}
+                    </p>
+                    {isSelected && (
+                      <div className="absolute top-3 right-3 text-emerald-500">
+                        <CheckCircle2 className="w-6 h-6 fill-emerald-500 text-white" />
+                      </div>
+                    )}
+                  </motion.button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Additional Details Card */}
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl p-6 md:p-8 border border-white/20">
+            <h2 className="text-gray-800 text-xl font-bold mb-6">A few more details...</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Experience Level */}
+              <div>
+                <label htmlFor="experienceLevel" className="block text-gray-700 font-semibold mb-2 text-sm">
+                  Experience Level
+                </label>
+                <div className="relative">
+                  <select
+                    id="experienceLevel"
+                    value={preferences.experienceLevel}
+                    onChange={(e) => setPreferences({ ...preferences, experienceLevel: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-gray-700 appearance-none transition-all hover:bg-white"
+                  >
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                    <option value="Expert">Expert</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Availability */}
+              <div>
+                <label htmlFor="availability" className="block text-gray-700 font-semibold mb-2 text-sm">
+                  Availability
+                </label>
+                <div className="relative">
+                  <select
+                    id="availability"
+                    value={preferences.availability}
+                    onChange={(e) => setPreferences({ ...preferences, availability: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-gray-700 appearance-none transition-all hover:bg-white"
+                  >
+                    <option value="Weekends">Weekends Only</option>
+                    <option value="Weekdays">Weekdays</option>
+                    <option value="Flexible">Flexible</option>
+                    <option value="Long Breaks">Long Breaks/Holidays</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Budget */}
+              <div>
+                <label htmlFor="budget" className="block text-gray-700 font-semibold mb-2 text-sm">
+                  Budget Range
+                </label>
+                <div className="relative">
+                  <select
+                    id="budget"
+                    value={preferences.budget}
+                    onChange={(e) => setPreferences({ ...preferences, budget: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-gray-700 appearance-none transition-all hover:bg-white"
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Very High">Very High</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <motion.button
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            type="submit"
+            disabled={isLoading}
+            className="w-full bg-primary text-white py-4 px-6 rounded-xl hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl font-bold text-lg disabled:opacity-70 flex justify-center items-center gap-2"
+          >
+            {isLoading ? <Loader className="animate-spin" /> : "Complete Profile"}
+          </motion.button>
+        </motion.form>
       </div>
     </div>
   );
 }
+
 export default PreferencesPage;

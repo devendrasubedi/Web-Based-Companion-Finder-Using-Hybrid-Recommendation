@@ -8,9 +8,17 @@ export default defineConfig({
     tailwindcss(),
     react()],
   server: {
+    host: true, // Listen on all local IPs
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
     allowedHosts: [
       '.ngrok-free.dev',
-      '.ngrok.io', 
+      '.ngrok.io',
       '.ngrok.app'
     ]
   }
