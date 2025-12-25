@@ -9,12 +9,16 @@ const ForgotPasswordPage = () => {
 	const [email, setEmail] = useState("");
 	const [isSubmitted, setIsSubmitted] = useState(false);
 
-	const { isLoading, forgotPassword } = useAuthStore();
+	const { isLoading, forgotPassword, error } = useAuthStore();
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
-		await forgotPassword(email);
-		setIsSubmitted(true);
+		try {
+			await forgotPassword(email);
+			setIsSubmitted(true);
+		} catch (error) {
+			console.log(error);
+		}
 	};
 
 	return (
@@ -51,6 +55,7 @@ const ForgotPasswordPage = () => {
 
 					{!isSubmitted ? (
 						<form onSubmit={handleSubmit} className="space-y-5">
+							{error && <p className="text-red-500 text-sm font-semibold text-center">{error}</p>}
 							<Input
 								icon={<Mail className="w-5 h-5" />}
 								type='email'

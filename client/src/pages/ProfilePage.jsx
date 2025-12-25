@@ -1,209 +1,136 @@
-import { useState } from 'react';
-import { mockUsers } from '../data/mockData';
-import { MapPin, Languages, Edit2, Mountain, Bookmark, Award, LogOut } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { User, Mountain } from 'lucide-react';
 
-function ProfilePage({ userId, currentUserEmail }) {
+import ProfileDetails from '../components/profile/ProfileDetails';
+import ProfilePreferences from '../components/profile/ProfilePreferences';
+import ProfilePastHikes from '../components/profile/ProfilePastHikes';
+import ProfileSavedHikes from '../components/profile/ProfileSavedHikes';
+
+function ProfilePage() {
+  const { id } = useParams();
+  const { user: authUser, logout, updateProfile, getUserProfile } = useAuthStore();
+  const navigate = useNavigate();
+
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const { logout } = useAuthStore();
+  const [editedUser, setEditedUser] = useState({});
 
-  // Find the user or fallback to the first mock user
-  const user = userId ? mockUsers.find(u => u.id === userId) : mockUsers[0];
-  const isOwnProfile = !userId || user?.email === currentUserEmail;
 
-  const [editedUser, setEditedUser] = useState(user || mockUsers[0]);
+  // If no ID param, it's own profile. If ID matches authUser ID, it's own profile.
+  const isOwnProfile = !id || (authUser && id === authUser._id);
 
-  if (!user) {
-    return (
-      <div className="min-h-screen pt-24 pb-12 px-4 bg-muted/20">
-        <div className="max-w-7xl mx-auto text-center">
-          <h2 className="text-foreground mb-2">User not found</h2>
-          <p className="text-muted-foreground">The user you&apos;re looking for doesn&apos;t exist.</p>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const fetchUser = async () => {
+      setIsLoading(true);
+      try {
+        if (isOwnProfile) {
+          if (authUser) {
+            setUser(authUser);
+            setEditedUser(authUser);
+          }
+        } else {
+          // Fetch other user
+          const fetchedUser = await getUserProfile(id);
+          setUser(fetchedUser);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const handleSave = () => {
-    // In a real app, this would save to backend
-    setIsEditing(false);
+    fetchUser();
+  }, [id, authUser, isOwnProfile, getUserProfile]);
+
+  // Sync edits 
+  useEffect(() => {
+    if (isOwnProfile && authUser) {
+      setUser(authUser);
+      if (!isEditing) {
+        setEditedUser(authUser);
+      }
+    }
+  }, [authUser, isOwnProfile, isEditing]);
+
+
+  const handleSave = async () => {
+    try {
+      await updateProfile(editedUser);
+      setIsEditing(false);
+    } catch (error) {
+      console.error("Failed to update profile", error);
+    }
   };
 
   const handleLogout = async () => {
     try {
       await logout();
+      navigate('/login');
     } catch (error) {
       console.error("Logout failed", error);
     }
   };
 
-  return (
-    // Main container with a subtle background color from theme
-    <div className="min-h-screen pt-8 pb-12 bg-muted/20">
-      <div className="w-full px-4 sm:px-6 lg:px-8 space-y-6">
+  if (isLoading) {
+    return (
+      <div className="min-h-screen pt-24 pb-12 px-4 flex justify-center items-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
-        {/* 1. Profile Header Card */}
-        <div className="bg-card rounded-2xl shadow-sm border border-border p-8">
-          <div className="flex flex-col md:flex-row gap-8 items-start">
-            {/* Avatar */}
-            <div className="flex-shrink-0">
-              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-primary-foreground text-5xl font-normal shadow-md">
-                {user.profileImage ? (
-                  <img src={user.profileImage} alt={user.name} className="w-full h-full rounded-full object-cover" />
-                ) : (
-                  <span>{user.name.charAt(0).toUpperCase()}</span>
-                )}
-              </div>
-            </div>
-
-            {/* User Details */}
-            <div className="flex-grow w-full">
-              <div className="flex justify-between items-start">
-                <div className="space-y-2">
-                  <div className="space-y-1">
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editedUser.name}
-                        onChange={(e) => setEditedUser({ ...editedUser, name: e.target.value })}
-                        className="text-2xl font-semibold px-2 py-1 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      />
-                    ) : (
-                      <h1 className="text-2xl font-semibold text-foreground">{user.name}</h1>
-                    )}
-
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-muted-foreground text-sm">
-                      <span>{user.age} years • {user.gender}</span>
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-4 h-4" />
-                        {user.district}, {user.province}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Languages className="w-4 h-4" />
-                        {user.languages.join(', ')}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Bio Section */}
-                  <div className="pt-2 max-w-2xl">
-                    {isEditing ? (
-                      <textarea
-                        value={editedUser.bio}
-                        onChange={(e) => setEditedUser({ ...editedUser, bio: e.target.value })}
-                        className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[80px]"
-                        placeholder="Tell us about yourself..."
-                      />
-                    ) : (
-                      <p className="text-muted-foreground text-base leading-relaxed">{user.bio}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Actions Buttons */}
-                {isOwnProfile && (
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-                      className="flex-shrink-0 flex items-center gap-2 px-5 py-2 bg-primary text-primary-foreground rounded-full text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      {isEditing ? 'Save' : 'Edit Profile'}
-                    </button>
-                    <button
-                      onClick={handleLogout}
-                      className="flex-shrink-0 flex items-center gap-2 px-5 py-2 bg-destructive text-destructive-foreground rounded-full text-sm font-medium hover:bg-destructive/90 transition-colors shadow-sm"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      Logout
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+  if (!user) {
+    return (
+      <div className="min-h-screen pt-24 pb-12 px-4 flex justify-center items-center">
+        <div className="text-center">
+          <User className="mx-auto h-12 w-12 text-muted-foreground opacity-50 mb-4" />
+          <h2 className="text-xl font-semibold mb-2">User not found</h2>
+          <button onClick={() => navigate('/')} className="text-primary hover:underline">Go Home</button>
         </div>
+      </div>
+    );
+  }
 
-        {/* 2. Preferences Card */}
-        {user.preferences && (
-          <div className="bg-card rounded-2xl shadow-sm border border-border p-8">
-            <h2 className="text-lg font-semibold text-foreground mb-6 flex items-center gap-2">
-              <Award className="w-5 h-5 text-primary" />
-              Trekking Preferences
-            </h2>
+  return (
+    <div className="min-h-screen pt-24 pb-12 px-4 sm:px-6 lg:px-8 bg-background">
+      <div className="max-w-6xl mx-auto space-y-8">
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-y-8 gap-x-12 mb-8">
-              <div>
-                <p className="text-muted-foreground text-sm mb-1.5 uppercase tracking-wide font-medium">Experience Level</p>
-                <p className="text-foreground text-lg font-medium">{user.preferences.experienceLevel}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-sm mb-1.5 uppercase tracking-wide font-medium">Availability</p>
-                <p className="text-foreground text-lg font-medium">{user.preferences.availability}</p>
-              </div>
-            </div>
+        {/* 1. Profile Details Block */}
+        <ProfileDetails
+          user={user}
+          isOwnProfile={isOwnProfile}
+          isEditing={isEditing}
+          onEditToggle={() => setIsEditing(true)}
+          onSave={handleSave}
+          onCancel={() => { setIsEditing(false); setEditedUser(user); }}
+          onLogout={handleLogout}
+          editedUser={editedUser}
+          setEditedUser={setEditedUser}
+        />
 
-            {user.preferences.interests.length > 0 && (
-              <div>
-                <p className="text-muted-foreground text-sm mb-3 uppercase tracking-wide font-medium">Interests</p>
-                <div className="flex flex-wrap gap-2">
-                  {user.preferences.interests.map((interest) => (
-                    <span
-                      key={interest}
-                      className="px-4 py-1.5 bg-primary/10 text-primary rounded-full text-sm font-medium"
-                    >
-                      {interest}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+        {/* 2. Grid for Preferences, Past Hikes, Saved Hikes */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+
+          {/* Preferences Block */}
+          <div className="lg:col-span-1">
+            <ProfilePreferences
+              user={user}
+              isOwnProfile={isOwnProfile}
+            />
           </div>
-        )}
 
-        {/* 3. Hiking Activity Card */}
-        <div className="bg-card rounded-2xl shadow-sm border border-border p-8">
-          <h2 className="text-lg font-semibold text-foreground mb-6">Hiking Activity</h2>
+          {/* Activity Section (Split into Past and Saved) */}
+          <div className="lg:col-span-2 space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+              {/* Past Hikes Block */}
+              <ProfilePastHikes pastHikes={user.pastHikes} />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-            {/* Completed Treks */}
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Mountain className="w-5 h-5 text-primary" />
-                <h3 className="font-medium text-foreground">Completed Treks</h3>
-              </div>
-              {user.pastHikes && user.pastHikes.length > 0 ? (
-                <ul className="space-y-3">
-                  {user.pastHikes.map((hike, index) => (
-                    <li key={index} className="flex items-start gap-3">
-                      <span className="text-primary mt-1.5">•</span>
-                      <span className="text-muted-foreground">{hike}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-muted-foreground text-sm italic">No completed treks yet</p>
-              )}
-            </div>
-
-            {/* Saved Trails */}
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Bookmark className="w-5 h-5 text-primary" />
-                <h3 className="font-medium text-foreground">Saved Trails</h3>
-              </div>
-              {user.savedHikes && user.savedHikes.length > 0 ? (
-                <ul className="space-y-3">
-                  {user.savedHikes.map((hike, index) => (
-                    <li key={index} className="flex items-start gap-3">
-                      <span className="text-primary mt-1.5">•</span>
-                      <span className="text-muted-foreground">{hike}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-muted-foreground text-sm italic">No saved trails</p>
-              )}
+              {/* Saved Hikes Block */}
+              <ProfileSavedHikes savedHikes={user.savedHikes} />
             </div>
           </div>
         </div>

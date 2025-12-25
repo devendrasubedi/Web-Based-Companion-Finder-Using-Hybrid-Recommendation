@@ -9,7 +9,9 @@ import { stat } from "fs";
 
 export const signup = async (req, res) => {
     const { email, password, name, dob, phone, province, district, gender } = req.body;
-    console.log("Signup Request Body:", req.body); // Debug log
+    console.log("Signup Request Body:", req.body);
+    console.log("JWT_SECRET available:", !!process.env.JWT_SECRET);
+    console.log("MONGO_URI available:", !!process.env.MONGO_URI);
 
     try {
         if (!email) throw new Error("Email is required");
@@ -63,7 +65,8 @@ export const signup = async (req, res) => {
             message: "User created successfully",
             user: {
                 ...user._doc,
-                password: undefined
+                password: undefined,
+                ...userProfile._doc
             }
         })
 
@@ -121,12 +124,15 @@ export const login = async (req, res) => {
         user.lastLogin = new Date();
         await user.save();
 
+        const userProfile = await UserProfile.findOne({ userId: user._id });
+
         res.status(200).json({
             sucess: true,
             message: "Logged in sucessfully",
             user: {
                 ...user._doc,
                 password: undefined,
+                ...userProfile?._doc
             }
         });
 
@@ -159,7 +165,7 @@ export const forgotPassword = async (req, res) => {
         await user.save();
 
         //send email with reset link
-        await sendPasswordResetEmail(user.email, `${process.env.CLIENT_URL}/reset-password/${resetToken}`);
+        await sendPasswordResetEmail(user.email, `${process.env.CLIENT_URL}/reset-password/${resetToken}`, user.name);
         res.status(200).json({ success: true, message: "Password reset email sent successfully." });
 
     } catch (error) {
@@ -191,7 +197,7 @@ export const resetPassword = async (req, res) => {
         user.passwordResetTokenExpiresAt = undefined;
         await user.save();
 
-        await sendResetSuccessEmail(user.email);
+        await sendResetSuccessEmail(user.email, user.name);
 
         res.status(200).json({ success: true, message: "Password reset successfully." });
 
@@ -208,7 +214,15 @@ export const checkAuth = async (req, res) => {
             return res.status(404).json({ success: false, message: "User not found" });
         }
 
-        res.status(200).json({ sucess: true, user })
+        const userProfile = await UserProfile.findOne({ userId: req.userId });
+
+        res.status(200).json({
+            sucess: true,
+            user: {
+                ...user._doc,
+                ...userProfile?._doc
+            }
+        })
     } catch (error) {
         console.log("error in checkAuth", error);
         res.status(400).json({ sucess: false, message: error.message });
@@ -220,6 +234,7 @@ export const savePreferences = async (req, res) => {
     const userId = req.userId;
 
     try {
+        const user = await User.findById(userId); // Need user for merging
         const userProfile = await UserProfile.findOne({ userId });
 
         if (!userProfile) {
@@ -227,31 +242,68 @@ export const savePreferences = async (req, res) => {
         }
 
         // Update fields
-        if (interests) userProfile.interests = interests; // Assuming structure matches model
+        if (interests) userProfile.interests = interests;
         if (experienceLevel) userProfile.experienceLevel = experienceLevel.toLowerCase();
-        if (availability) {
-            // Mapping UI availability string to some meaningful data if needed, or just string for now?
-            // The model has availabilityWindow: { startMonth, endMonth }. 
-            // The UI sends "Weekends", "Flexible" etc.
-            // For now let's might need to adjust the model OR just store it as a string if we change model.
-            // Let's store it in a new field 'availabilityType' or map it.
-            // Checking model: availabilityWindow is Object. 
-            // I will add a generic 'availability' string field to model in next step to support this.
-            userProfile.availability = availability;
-        }
-        if (budget) {
-            // Model has budget: { min, max, currency }. UI sends "Low", "Medium".
-            // We'll simplistic map for now or again, add a simple string field.
-            userProfile.budgetLevel = budget;
-        }
+        if (availability) userProfile.availability = availability;
+        if (budget) userProfile.budgetLevel = budget;
         if (languagesKnown) userProfile.languagesKnown = languagesKnown;
 
         await userProfile.save();
 
-        res.status(200).json({ success: true, message: "Preferences saved successfully", userProfile });
+        res.status(200).json({
+            success: true,
+            message: "Preferences saved successfully",
+            user: {
+                ...user._doc,
+                ...userProfile._doc
+            }
+        });
 
     } catch (error) {
         console.log("Error inside savePreferences: ", error);
         res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+export const updateProfile = async (req, res) => {
+    const { name, bio, gender, phone, province, district, languagesKnown } = req.body;
+    const userId = req.userId;
+
+    try {
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        const userProfile = await UserProfile.findOne({ userId });
+
+        if (name) user.name = name;
+        await user.save();
+
+        if (userProfile) {
+            if (name) userProfile.name = name;
+            if (gender) userProfile.gender = gender;
+            if (phone) userProfile.phone = phone;
+            if (province) userProfile.province = province;
+            if (district) userProfile.district = district;
+            if (bio !== undefined) userProfile.bio = bio;
+            if (languagesKnown !== undefined) userProfile.languagesKnown = languagesKnown;
+
+            await userProfile.save();
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Profile updated successfully",
+            user: {
+                ...user._doc,
+                password: undefined,
+                ...(userProfile ? userProfile._doc : {})
+            }
+        });
+
+    } catch (error) {
+        console.log("Error in updateProfile: ", error);
+        res.status(500).json({ success: false, message: "Server Error" });
     }
 };

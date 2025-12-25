@@ -98,10 +98,31 @@ export const useAuthStore = create((set) => ({
 	savePreferences: async (preferences) => {
 		set({ isLoading: true, error: null });
 		try {
-			await axios.post(`${API_URL}/preferences`, preferences);
-			set({ isLoading: false });
+			const response = await axios.post(`${API_URL}/preferences`, preferences);
+			set({ user: response.data.user, isLoading: false });
 		} catch (error) {
 			set({ error: error.response.data.message || "Error saving preferences", isLoading: false });
+			throw error;
+		}
+	},
+	updateProfile: async (data) => {
+		set({ isLoading: true, error: null });
+		try {
+			const response = await axios.put(`${API_URL}/profile`, data);
+			set({ user: response.data.user, isLoading: false });
+			return response.data;
+		} catch (error) {
+			set({ error: error.response.data.message || "Error updating profile", isLoading: false });
+			throw error;
+		}
+	},
+	getUserProfile: async (userId) => {
+		set({ isLoading: true, error: null });
+		try {
+			const response = await axios.get(`/api/users/${userId}`);
+			return response.data.user;
+		} catch (error) {
+			set({ error: error.response?.data?.message || "Error fetching user profile", isLoading: false });
 			throw error;
 		}
 	}

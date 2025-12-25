@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mountain, Star, Heart, Home, Sparkles, Loader, CheckCircle2 } from 'lucide-react';
+import { Mountain, Star, Heart, Home, Sparkles, Loader, CheckCircle2, Languages, Plus, X } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -41,8 +41,13 @@ const PreferencesPage = () => {
     experienceLevel: 'Beginner',
     availability: 'Weekends',
     budget: 'Medium',
+    budget: 'Medium',
     languagesKnown: []
   });
+
+  const [customLanguage, setCustomLanguage] = useState('');
+
+  const commonLanguages = ['Nepali', 'English', 'Hindi', 'Newari', 'Maithili', 'Tamang', 'Gurung', 'Sherpa'];
 
   const toggleInterest = (interest) => {
     if (preferences.interests.includes(interest)) {
@@ -55,6 +60,30 @@ const PreferencesPage = () => {
         ...preferences,
         interests: [...preferences.interests, interest]
       });
+    }
+  };
+
+  const toggleLanguage = (lang) => {
+    if (preferences.languagesKnown.includes(lang)) {
+      setPreferences({
+        ...preferences,
+        languagesKnown: preferences.languagesKnown.filter(l => l !== lang)
+      });
+    } else {
+      setPreferences({
+        ...preferences,
+        languagesKnown: [...preferences.languagesKnown, lang]
+      });
+    }
+  };
+
+  const addCustomLanguage = () => {
+    if (customLanguage.trim() && !preferences.languagesKnown.includes(customLanguage.trim())) {
+      setPreferences({
+        ...preferences,
+        languagesKnown: [...preferences.languagesKnown, customLanguage.trim()]
+      });
+      setCustomLanguage('');
     }
   };
 
@@ -194,6 +223,63 @@ const PreferencesPage = () => {
                     <option value="Very High">Very High</option>
                   </select>
                 </div>
+              </div>
+            </div>
+
+            {/* Languages Known */}
+            <div className="mt-8">
+              <label className="block text-gray-700 font-semibold mb-3 text-sm flex items-center gap-2">
+                <Languages className="w-4 h-4" />
+                Languages Known
+              </label>
+
+              <div className="flex flex-wrap gap-2 mb-4">
+                {commonLanguages.map((lang) => (
+                  <button
+                    key={lang}
+                    type="button"
+                    onClick={() => toggleLanguage(lang)}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${preferences.languagesKnown.includes(lang)
+                      ? 'bg-emerald-500 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                  >
+                    {lang}
+                  </button>
+                ))}
+
+                {/* Display valid custom languages that are NOT in commonLanguages */}
+                {preferences.languagesKnown
+                  .filter(lang => !commonLanguages.includes(lang))
+                  .map(lang => (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => toggleLanguage(lang)}
+                      className="px-4 py-2 rounded-full text-sm font-medium transition-all bg-emerald-500 text-white shadow-md flex items-center gap-1"
+                    >
+                      {lang}
+                      <X className="w-3 h-3 ml-1" />
+                    </button>
+                  ))}
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={customLanguage}
+                  onChange={(e) => setCustomLanguage(e.target.value)}
+                  placeholder="Add other language..."
+                  className="flex-grow px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-gray-700"
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomLanguage())}
+                />
+                <button
+                  type="button"
+                  onClick={addCustomLanguage}
+                  className="px-4 py-2 bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-colors"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
               </div>
             </div>
           </div>

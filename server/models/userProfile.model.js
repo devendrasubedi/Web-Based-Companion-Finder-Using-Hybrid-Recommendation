@@ -6,9 +6,14 @@ const userProfileSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
+
     name: {
         type: String,
         required: true
+    },
+    bio: {
+        type: String,
+        default: ""
     },
     dob: {
         type: Date,
@@ -63,15 +68,8 @@ const userProfileSchema = new mongoose.Schema({
         type: [String],
         default: []
     },
-    pastHikes: [{
-        name: String,
-        difficulty: String,
-        year: Number
-    }],
-    savedHikes: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Hike' // Assuming Hike model exists or will exist
-    }],
+    pastHikes: [], // Allow mixed data (strings or objects)
+    savedHikes: [], // Allow mixed data (strings or objects)
     languagesKnown: {
         type: [String],
         default: []

@@ -6,6 +6,7 @@ import cors from "cors";
 
 import { connectDB } from "./db/connectDB.js"
 import authRoutes from './routes/auth.route.js'
+import userRoutes from './routes/user.route.js'
 
 dotenv.config();
 
@@ -16,7 +17,8 @@ app.use(cors({ origin: true, credentials: true }));
 
 app.use(express.json()); //allows to parse incoming request :req.body
 app.use(cookieParser()); //to parse cookies from request
-app.use("/api/auth", authRoutes)
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
 
 
 app.listen(PORT, () => {

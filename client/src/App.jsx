@@ -100,6 +100,7 @@ function App() {
 					<Route path='/profile' element={<ProfilePage />} />
 					<Route path='/profile/:id' element={<ProfilePage />} />
 					<Route path='/trail/:id' element={<TrailDetails />} />
+					<Route path='/preferences' element={<PreferencesPage />} />
 				</Route>
 
 				{/* Standalone Auth Routes */}
@@ -136,8 +137,6 @@ function App() {
 						</RedirectAuthenticatedUser>
 					}
 				/>
-				<Route path='/preferences' element={<PreferencesPage />} />
-
 				{/* catch all routes */}
 				<Route path='*' element={<Navigate to='/' replace />} />
 			</Routes>
