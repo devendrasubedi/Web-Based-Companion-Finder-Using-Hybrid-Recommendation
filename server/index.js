@@ -7,6 +7,7 @@ import cors from "cors";
 import { connectDB } from "./db/connectDB.js"
 import authRoutes from './routes/auth.route.js'
 import userRoutes from './routes/user.route.js'
+import trailRoute from './routes/trail.route.js'
 
 dotenv.config();
 
@@ -19,7 +20,7 @@ app.use(express.json()); //allows to parse incoming request :req.body
 app.use(cookieParser()); //to parse cookies from request
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
-
+app.use("/api/trails", trailRoute);
 
 app.listen(PORT, () => {
   connectDB()
