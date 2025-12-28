@@ -1,7 +1,15 @@
+<<<<<<< HEAD
+
+import { useState, useEffect } from 'react';
+import { mockUsers } from '../data/mockData';
+import axios from 'axios';
+import { MapPin, Languages, Edit2, Mountain, Bookmark, Award } from 'lucide-react';
+=======
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { User, Mountain } from 'lucide-react';
+>>>>>>> e9f3635f32dd9aa80be7a98b1fea157047c1087d
 
 import ProfileDetails from '../components/profile/ProfileDetails';
 import ProfilePreferences from '../components/profile/ProfilePreferences';
@@ -16,7 +24,15 @@ function ProfilePage() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+<<<<<<< HEAD
+  const [loading, setLoading] = useState(true);
+  
+  // Find the user or fallback to the first mock user
+  const user = userId ? mockUsers.find(u => u.id === userId) : mockUsers[0];
+  const isOwnProfile = !userId || user?.email === currentUserEmail;
+=======
   const [editedUser, setEditedUser] = useState({});
+>>>>>>> e9f3635f32dd9aa80be7a98b1fea157047c1087d
 
 
   // If no ID param, it's own profile. If ID matches authUser ID, it's own profile.
@@ -84,6 +100,7 @@ function ProfilePage() {
   }
 
   if (!user) {
+
     return (
       <div className="min-h-screen pt-24 pb-12 px-4 flex justify-center items-center">
         <div className="text-center">
