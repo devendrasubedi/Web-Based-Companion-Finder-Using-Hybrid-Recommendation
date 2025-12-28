@@ -45,7 +45,7 @@ const ExploreSearchPage = ({ onNavigate }) => {
     // Difficulty
     const matchesDifficulty = selectedDifficulty === 'All' || trail.difficulty.toLowerCase() === selectedDifficulty.toLowerCase();
 
-    const matchesDays = selectedDays === 'All' || 
+    const matchesDays = selectedDays === 'All' ||
       (trail.duration && (() => {
         const days = trail.duration.charAt(0) === '>' ? parseInt(trail.duration.slice(2)) : parseInt(trail.duration);
         if (selectedDays === '1-5 days') return days >= 1 && days <= 5;
@@ -82,7 +82,7 @@ const ExploreSearchPage = ({ onNavigate }) => {
 
   return (
     <div className="min-h-screen pt-24 pb-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
 
         {/* Header & Search */}
         <div className="mb-8">

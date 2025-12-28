@@ -4,7 +4,7 @@ import { MessageCircle, Inbox } from 'lucide-react';
 const MessagesPage = ({ onNavigate }) => {
   return (
     <div className="min-h-screen pt-24 pb-12 bg-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
         {/* Header Section */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
@@ -21,15 +21,15 @@ const MessagesPage = ({ onNavigate }) => {
           <div className="w-16 h-16 md:w-20 md:h-20 bg-muted rounded-full flex items-center justify-center mb-6">
             <Inbox className="w-8 h-8 md:w-10 md:h-10 text-muted-foreground" />
           </div>
-          
+
           <h2 className="text-xl md:text-2xl font-medium text-foreground mb-2 text-center">
             No Messages Yet
           </h2>
-          
+
           <p className="text-muted-foreground text-center max-w-xs md:max-w-md mb-8 text-sm md:text-base">
             Start a conversation by joining a group or connecting with other trekkers to plan your next adventure.
           </p>
-          
+
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <button
               onClick={() => onNavigate('groups')}

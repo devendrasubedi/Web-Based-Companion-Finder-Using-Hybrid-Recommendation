@@ -1,30 +1,30 @@
 import React from 'react';
 import { Clock, TrendingUp, Star, MapPin } from 'lucide-react';
-import ImageWithFallback from './ImageWithFallback';
+import ImageWithFallback from './ImageWithFallBack';
 
 const TrailCard = ({ trail, onClick }) => {
   if (!trail) return null;
 
   return (
-    <div 
+    <div
       onClick={onClick}
       className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden group cursor-pointer hover:shadow-lg transition-all duration-300 h-full flex flex-col w-full"
     >
-      {/* Image Container - Slightly shorter on mobile (h-36) */}
-      <div className="relative h-36 sm:h-44 overflow-hidden shrink-0">
+      {/* Image Container - Using relative units for responsiveness */}
+      <div className="relative h-[20vh] min-h-[140px] max-h-[180px] sm:h-[25vh] sm:max-h-[220px] overflow-hidden shrink-0">
         <ImageWithFallback
           src={trail.image}
           alt={trail.name}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
         />
-        
+
         {/* Rating Badge */}
         <div className="absolute top-2 left-2 bg-white/95 backdrop-blur-md px-1.5 py-0.5 rounded flex items-center gap-1 shadow-sm border border-gray-100/50">
           <Star className="w-3 h-3 text-yellow-500 fill-current" />
           <span className="text-[10px] sm:text-xs font-bold text-gray-900">{trail.rating}</span>
         </div>
       </div>
-      
+
       {/* Content Container */}
       <div className="p-3 sm:p-4 flex flex-col flex-grow">
         {/* Location */}
@@ -57,7 +57,7 @@ const TrailCard = ({ trail, onClick }) => {
 
         {/* "View Details" */}
         <div className="mt-auto pt-2 sm:pt-3 border-t border-gray-100 flex justify-between items-center">
-             <span className="text-[10px] sm:text-xs font-semibold text-green-600 group-hover:underline">View Details</span>
+          <span className="text-[10px] sm:text-xs font-semibold text-green-600 group-hover:underline">View Details</span>
         </div>
       </div>
     </div>

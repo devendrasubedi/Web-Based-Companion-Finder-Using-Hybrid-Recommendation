@@ -1,77 +1,160 @@
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { Mail, Lock, Loader } from "lucide-react";
-import { Link } from "react-router-dom";
-import Input from "../components/Input";
-import { useAuthStore } from "../store/authStore";
+import { useState } from 'react';
+import { Mountain, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import Input from '../components/Input';
+import LoadingSpinner from '../components/LoadingSpinner';
+import { useAuthStore } from '../store/authStore';
+import { Link } from 'react-router-dom';
 
 const LoginPage = () => {
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
+	const [email, setEmail] = useState('');
+	const [password, setPassword] = useState('');
+	const [showPassword, setShowPassword] = useState(false);
+	const { login, isLoading, error } = useAuthStore();
+	// Local error state for form validation before API call
+	const [formErrors, setFormErrors] = useState({});
 
-    const { login, isLoading, error } = useAuthStore();
+	const validateForm = () => {
+		const newErrors = {};
 
-    const handleLogin = async (e) => {
-        e.preventDefault();
-        await login(email, password);
-    };
+		if (!email) {
+			newErrors.email = 'Email is required';
+		} else if (!/\S+@\S+\.\S+/.test(email)) {
+			newErrors.email = 'Please enter a valid email';
+		}
 
-    return (
-        <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className='max-w-md w-full bg-gray-800 bg-opacity-50 backdrop-filter backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden'
-        >
-            <div className='p-8'>
-                <h2 className='text-3xl font-bold mb-6 text-center bg-gradient-to-r from-green-400 to-emerald-500 text-transparent bg-clip-text'>
-                    Welcome Back
-                </h2>
+		if (!password) {
+			newErrors.password = 'Password is required';
+		}
 
-                <form onSubmit={handleLogin}>
-                    <Input
-                        icon={Mail}
-                        type='email'
-                        placeholder='Email Address'
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                    />
+		setFormErrors(newErrors);
+		return Object.keys(newErrors).length === 0;
+	};
 
-                    <Input
-                        icon={Lock}
-                        type='password'
-                        placeholder='Password'
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                    />
+	const handleSubmit = async (e) => {
+		e.preventDefault();
 
-                    <div className='flex items-center mb-6'>
-                        <Link to='/forgot-password' className='text-sm text-green-400 hover:underline'>
-                            Forgot password?
-                        </Link>
-                    </div>
-                    {error && <p className='text-red-500 font-semibold mb-2'>{error}</p>}
+		if (!validateForm()) return;
 
-                    <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        className='w-full py-3 px-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-lg shadow-lg hover:from-green-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-gray-900 transition duration-200'
-                        type='submit'
-                        disabled={isLoading}
-                    >
-                        {isLoading ? <Loader className='w-6 h-6 animate-spin  mx-auto' /> : "Login"}
-                    </motion.button>
-                </form>
-            </div>
-            <div className='px-8 py-4 bg-gray-900 bg-opacity-50 flex justify-center'>
-                <p className='text-sm text-gray-400'>
-                    Don't have an account?{" "}
-                    <Link to='/signup' className='text-green-400 hover:underline'>
-                        Sign up
-                    </Link>
-                </p>
-            </div>
-        </motion.div>
-    );
+		await login(email, password);
+	};
+
+	return (
+		<div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-primary via-secondary to-accent relative overflow-hidden">
+			{/* Decorative Elements */}
+			<div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+				<div className="absolute top-20 left-10 w-72 h-72 bg-white rounded-full blur-3xl" />
+				<div className="absolute bottom-20 right-10 w-96 h-96 bg-white rounded-full blur-3xl" />
+				<div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white rounded-full blur-3xl" />
+			</div>
+
+			<div className="relative w-full max-w-md">
+				{/* Logo and Title */}
+				<div className="text-center mb-8">
+					<div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-full mb-4 shadow-2xl">
+						<Mountain className="w-10 h-10 text-primary" />
+					</div>
+					<h1 className="text-white text-3xl font-bold mb-2 drop-shadow-lg">TrekMate</h1>
+					<p className="text-white/90 drop-shadow font-medium">Find your perfect hiking companion</p>
+				</div>
+
+				{/* Login Card */}
+				<div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20">
+					<div className="text-center mb-8">
+						<h2 className="text-2xl font-bold text-foreground mb-2">Welcome Back</h2>
+						<p className="text-muted-foreground">Login to continue your adventure</p>
+					</div>
+
+					<form onSubmit={handleSubmit} className="space-y-5">
+						<Input
+							type="email"
+							id="login-email"
+							label="Email"
+							value={email}
+							onChange={(e) => {
+								setEmail(e.target.value);
+								if (formErrors.email) setFormErrors({ ...formErrors, email: undefined });
+							}}
+							placeholder="your@email.com"
+							icon={<Mail className="w-5 h-5" />}
+							error={formErrors.email}
+						/>
+
+						<div className="relative">
+							<Input
+								type={showPassword ? 'text' : 'password'}
+								id="login-password"
+								label="Password"
+								value={password}
+								onChange={(e) => {
+									setPassword(e.target.value);
+									if (formErrors.password) setFormErrors({ ...formErrors, password: undefined });
+								}}
+								placeholder="••••••••"
+								icon={<Lock className="w-5 h-5" />}
+								error={formErrors.password}
+							/>
+							<button
+								type="button"
+								onClick={() => setShowPassword(!showPassword)}
+								className="absolute right-3 top-[38px] text-muted-foreground hover:text-foreground transition-colors z-10"
+							>
+								{showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+							</button>
+						</div>
+
+						{error && (
+							<div className="p-3 rounded-lg bg-red-50 text-red-500 text-sm font-medium border border-red-100">
+								{error}
+							</div>
+						)}
+
+						<div className="flex items-center justify-between text-sm">
+							<label className="flex items-center gap-2 cursor-pointer">
+								<input
+									type="checkbox"
+									className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+								/>
+								<span className="text-muted-foreground">Remember me</span>
+							</label>
+							<Link
+								to="/forgot-password"
+								className="text-primary hover:text-primary/80 transition-colors font-medium"
+							>
+								Forgot password?
+							</Link>
+						</div>
+
+						<button
+							type="submit"
+							disabled={isLoading}
+							className="w-full bg-primary text-white py-3 px-4 rounded-xl hover:bg-primary/90 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
+						>
+							{isLoading ? (
+								<>
+									<LoadingSpinner size="sm" />
+									<span>Logging in...</span>
+								</>
+							) : (
+								'Login'
+							)}
+						</button>
+
+						<div className="text-center pt-4 border-t border-border mt-6">
+							<p className="text-muted-foreground text-sm">
+								Don&apos;t have an account?{' '}
+								<Link
+									to="/signup"
+									className="text-primary hover:text-primary/80 transition-colors font-medium"
+								>
+									Sign up
+								</Link>
+							</p>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+	);
 };
+
 export default LoginPage;
