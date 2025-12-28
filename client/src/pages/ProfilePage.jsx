@@ -1,9 +1,12 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { mockUsers } from '../data/mockData';
+import axios from 'axios';
 import { MapPin, Languages, Edit2, Mountain, Bookmark, Award } from 'lucide-react';
 
 function ProfilePage({ userId, currentUserEmail }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
   
   // Find the user or fallback to the first mock user
   const user = userId ? mockUsers.find(u => u.id === userId) : mockUsers[0];
@@ -12,6 +15,7 @@ function ProfilePage({ userId, currentUserEmail }) {
   const [editedUser, setEditedUser] = useState(user || mockUsers[0]);
 
   if (!user) {
+
     return (
       <div className="min-h-screen pt-24 pb-12 px-4 bg-muted/20">
         <div className="max-w-7xl mx-auto text-center">
