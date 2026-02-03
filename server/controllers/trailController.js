@@ -1,4 +1,4 @@
-import { Trail } from '../models/trail.model.js';
+import { Trail } from '../models/trailModel.js';
 
 // FOR THE CARDS (List View)
 export const getAllTrails = async (req, res) => {
