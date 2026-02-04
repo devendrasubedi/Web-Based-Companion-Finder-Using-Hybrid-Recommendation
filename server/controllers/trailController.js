@@ -5,15 +5,15 @@ export const getAllTrails = async (req, res) => {
     try {
         // .select() ensures we only get the fields needed for the card
         // This makes the API response much faster!
-        const trails = await Trail.find({}).select('name distance duration images');
+        const trails = await Trail.find({}).select('name distance duration');
 
-        // Optional: Map the results to only send the FIRST image for the card
+        // Map the results to send basic trail data for cards
         const cardData = trails.map(trail => ({
             _id: trail._id,
             name: trail.name,
-            distance: trail.distance.min_km,
-            duration: trail.duration.min_days,
-            thumbnail: trail.images[0]?.local_path || 'default.jpg'
+            distance: trail.distance?.min_km || 0,
+            duration: trail.duration?.min_days || 0,
+            thumbnail: 'default.jpg'
         }));
 
         res.status(200).json(cardData);

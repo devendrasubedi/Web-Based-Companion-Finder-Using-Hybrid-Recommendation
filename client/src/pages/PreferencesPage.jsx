@@ -41,7 +41,6 @@ const PreferencesPage = () => {
     experienceLevel: 'Beginner',
     availability: 'Weekends',
     budget: 'Medium',
-    budget: 'Medium',
     languagesKnown: []
   });
 

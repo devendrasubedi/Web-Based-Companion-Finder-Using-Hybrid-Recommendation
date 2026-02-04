@@ -8,7 +8,7 @@ import cors from "cors";
 import { connectDB } from "./db/connectDB.js"
 import authRoutes from './routes/auth.route.js'
 import userRoutes from './routes/user.route.js'
-import trailRoute from './routes/trailRoutes.js'
+import trailRoutes from './routes/trailRoutes.js'
 
 dotenv.config();
 const app = express();
@@ -22,7 +22,20 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/trails", trailRoutes);
 
-app.listen(PORT, () => {
-  connectDB()
-  console.log(`Example app listening on port ${PORT}`)
-})
+// app.listen(PORT, () => {
+//   connectDB()
+//   console.log(`Example app listening on port ${PORT}`)
+// })
+const startServer = async () => {
+  try {
+    await connectDB();
+    app.listen(PORT, () => {
+      console.log(`Server listening on port ${PORT}`)
+    })
+  } catch (error) {
+    console.log("Failed to start server:", error)
+    process.exit(1)
+  }
+}
+
+startServer()
