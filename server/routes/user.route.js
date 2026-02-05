@@ -1,9 +1,15 @@
 import express from "express";
-import { getUserProfile } from "../controllers/user.controller.js";
+import { getAllUsers, getUserProfile } from "../controllers/user.controller.js";
 import { verifyToken } from "../middleware/verifyToken.js";
 
 const router = express.Router();
 
+console.log('Setting up user routes - getAllUsers:', typeof getAllUsers, 'getUserProfile:', typeof getUserProfile);
+
+// Get all users (for homepage cards)
+router.get("/", getAllUsers);
+
+// Get specific user profile
 router.get("/:id", getUserProfile);
 // Note: We might want verifyToken if profile is private, but usually profiles are public or semi-public.
 // Keeping it open for now or we can add verifyToken if strictly private. 

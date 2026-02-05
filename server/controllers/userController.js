@@ -1,5 +1,15 @@
 import { userModel } from '../models/userModel.js';
 
+// Get all users (minimal profile for cards / suggestions)
+export const getAllUsers = async (req, res) => {
+    try {
+        const users = await userModel.find({}).select('name province district interests createdAt');
+        res.status(200).json(users);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // Get user profile by ID
 export const getUserProfile = async (req, res) => {
     try {

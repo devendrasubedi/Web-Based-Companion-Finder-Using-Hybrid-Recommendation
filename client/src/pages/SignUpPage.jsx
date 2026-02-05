@@ -55,7 +55,7 @@ const SignUpPage = () => {
 	const selectNormalClass = "border-input focus:ring-primary/20 focus:border-ring";
 
 	return (
-		<div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-primary via-secondary to-accent relative overflow-hidden">
+		<div className="min-h-screen flex items-center justify-center p-4 bg-linear-to-br from-primary via-secondary to-accent relative overflow-hidden">
 			{/* Decorative Elements */}
 			<div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
 				<div className="absolute top-20 left-10 w-72 h-72 bg-white rounded-full blur-3xl" />

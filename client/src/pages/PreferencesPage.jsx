@@ -41,7 +41,6 @@ const PreferencesPage = () => {
     experienceLevel: 'Beginner',
     availability: 'Weekends',
     budget: 'Medium',
-    budget: 'Medium',
     languagesKnown: []
   });
 
@@ -104,7 +103,7 @@ const PreferencesPage = () => {
   };
 
   return (
-    <div className="min-h-screen pt-24 pb-12 px-4 bg-gradient-to-br from-primary via-secondary to-accent relative overflow-hidden flex items-center justify-center">
+    <div className="min-h-screen pt-24 pb-12 px-4 bg-linear-to-br from-primary via-secondary to-accent relative overflow-hidden flex items-center justify-center">
       {/* Decorative Elements matching Auth Pages */}
       <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 bg-white rounded-full blur-3xl" />
