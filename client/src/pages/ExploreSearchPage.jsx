@@ -1,15 +1,20 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import TrailCard from '../components/TrailCard';
-import { mockTrails } from '../data/mockData';
+import axios from 'axios';
 import { Search, X, SlidersHorizontal, MapPin, Calendar, Wallet, Mountain, Frown } from 'lucide-react';
 
-const ExploreSearchPage = ({ onNavigate }) => {
+const ExploreSearchPage = () => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProvince, setSelectedProvince] = useState('All');
   const [selectedDifficulty, setSelectedDifficulty] = useState('All');
   const [selectedDays, setSelectedDays] = useState('All');
   const [selectedBudget, setSelectedBudget] = useState('All');
   const [showFilters, setShowFilters] = useState(false);
+  const [allTrails, setAllTrails] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // 1. Provinces of Nepal
   const provinces = [
@@ -29,32 +34,65 @@ const ExploreSearchPage = ({ onNavigate }) => {
   const difficulties = ['All', 'Easy', 'Moderate', 'Challenging', 'Difficult'];
   const daysOptions = ['All', '1-5 days', '5-10 days', '10-15 days', '15-20 days', '20+ days'];
 
+  // Fetch trails from API
+  useEffect(() => {
+    const fetchTrails = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const response = await axios.get('/api/trails');
+        console.log('Fetched trails:', response.data);
+        setAllTrails(response.data || []);
+      } catch (err) {
+        console.error('Error fetching trails:', err);
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchTrails();
+  }, []);
+
   // Filter Logic
-  const filteredTrails = mockTrails.filter(trail => {
+  const filteredTrails = allTrails.filter(trail => {
+    // Safety check - ensure trail exists
+    if (!trail) return false;
+
     // Search
+    const searchLower = searchQuery.toLowerCase();
     const matchesSearch = !searchQuery ||
-      trail.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (trail.region && trail.region.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (trail.description && trail.description.toLowerCase().includes(searchQuery.toLowerCase()));
+      (trail.name && trail.name.toLowerCase().includes(searchLower)) ||
+      (trail.location && trail.location.toLowerCase().includes(searchLower)) ||
+      (trail.description && trail.description.toLowerCase().includes(searchLower));
 
-    // Province
-    const matchesProvince = selectedProvince === 'All' ||
-      (trail.province === selectedProvince) ||
-      (trail.region && trail.region.includes(selectedProvince));
+    // Province/Location - check multiple possible fields
+    let matchesProvince = selectedProvince === 'All';
+    if (!matchesProvince) {
+      matchesProvince = 
+        (trail.province && trail.province === selectedProvince) ||
+        (trail.location && trail.location === selectedProvince) ||
+        (trail.location && trail.location.includes(selectedProvince)) ||
+        (trail.region && trail.region.includes(selectedProvince));
+    }
 
-    // Difficulty
-    const matchesDifficulty = selectedDifficulty === 'All' || trail.difficulty.toLowerCase() === selectedDifficulty.toLowerCase();
+    // Difficulty - handle case-insensitive comparison
+    const trailDifficulty = trail.difficulty ? trail.difficulty.toLowerCase() : '';
+    const filterDifficulty = selectedDifficulty.toLowerCase();
+    const matchesDifficulty = selectedDifficulty === 'All' || trailDifficulty === filterDifficulty;
 
-    const matchesDays = selectedDays === 'All' ||
-      (trail.duration && (() => {
-        const days = trail.duration.charAt(0) === '>' ? parseInt(trail.duration.slice(2)) : parseInt(trail.duration);
-        if (selectedDays === '1-5 days') return days >= 1 && days <= 5;
-        if (selectedDays === '5-10 days') return days > 5 && days <= 10;
-        if (selectedDays === '10-15 days') return days > 10 && days <= 15;
-        if (selectedDays === '15-20 days') return days > 15 && days <= 20;
-        if (selectedDays === '20+ days') return days > 20;
-        return false;
-      })());
+    // Duration matching
+    let matchesDays = true;
+    if (selectedDays !== 'All' && trail.duration) {
+      // Extract days from strings like "7-10 Days", "3-5 Days", "12 days"
+      const daysMatch = trail.duration.match(/(\d+)/);
+      const days = daysMatch ? parseInt(daysMatch[1]) : 0;
+      
+      if (selectedDays === '1-5 days') matchesDays = days >= 1 && days <= 5;
+      else if (selectedDays === '5-10 days') matchesDays = days > 5 && days <= 10;
+      else if (selectedDays === '10-15 days') matchesDays = days > 10 && days <= 15;
+      else if (selectedDays === '15-20 days') matchesDays = days > 15 && days <= 20;
+      else if (selectedDays === '20+ days') matchesDays = days > 20;
+    }
 
 
     // Budget Logic
@@ -71,6 +109,13 @@ const ExploreSearchPage = ({ onNavigate }) => {
     return matchesSearch && matchesProvince && matchesDifficulty && matchesDays && matchesBudget;
   });
 
+  // Debug logging
+  useEffect(() => {
+    console.log('Filter state changed:', { selectedProvince, selectedDifficulty, selectedDays, selectedBudget });
+    console.log('All trails count:', allTrails.length);
+    console.log('Filtered trails count:', filteredTrails.length);
+  }, [selectedProvince, selectedDifficulty, selectedDays, selectedBudget, allTrails, filteredTrails]);
+
   const hasActiveFilters = selectedProvince !== 'All' || selectedDifficulty !== 'All' || selectedDays !== 'All' || selectedBudget !== 'All';
 
   const clearFilters = () => {
@@ -79,6 +124,30 @@ const ExploreSearchPage = ({ onNavigate }) => {
     setSelectedDays('All');
     setSelectedBudget('All');
   };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen pt-24 pb-12 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+          <p className="text-muted-foreground">Loading trails...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen pt-24 pb-12 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <p className="text-red-500 font-semibold mb-2">Error loading trails</p>
+          <p className="text-muted-foreground text-sm">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pt-24 pb-12">
@@ -216,7 +285,7 @@ const ExploreSearchPage = ({ onNavigate }) => {
               <TrailCard
                 key={trail.id}
                 trail={trail}
-                onClick={() => onNavigate('trail-detail', trail.id)}
+                onClick={() => navigate(`/trail/${trail.id}`)}
               />
             ))}
           </div>

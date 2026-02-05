@@ -82,7 +82,15 @@ const TrailDetails = () => {
   const displayImages = trail.image ? [trail.image] : ["https://via.placeholder.com/800x400?text=Trail"];
   
   const tags = trail.tags || [];
-  const itinerary = trail.itinerary || [];
+  
+  // Handle itinerary - can be array of objects or strings
+  const itinerary = (trail.itinerary || []).map(item => {
+    if (typeof item === 'string') {
+      return { description: item, points: [] };
+    }
+    return item;
+  });
+  
   const reviews = trail.reviews || [];
 
   console.log('Trail data:', trail);
@@ -130,20 +138,33 @@ const TrailDetails = () => {
 
           <div className="p-5">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4 text-sm">
-              <div>
-                <p className="text-muted-foreground text-xs">Region</p>
-                <p className="text-foreground font-medium">{trail.province || trail.region}</p>
-              </div>
+              {trail.location && (
+                <div>
+                  <p className="text-muted-foreground text-xs">Location</p>
+                  <p className="text-foreground font-medium">
+                    {typeof trail.location === 'object' 
+                      ? `${trail.location.start || ''} - ${trail.location.end || ''}`
+                      : trail.location
+                    }
+                  </p>
+                </div>
+              )}
+              {(trail.province || trail.region) && (
+                <div>
+                  <p className="text-muted-foreground text-xs">Region</p>
+                  <p className="text-foreground font-medium">{trail.province || trail.region}</p>
+                </div>
+              )}
               {trail.district && (
                 <div>
                   <p className="text-muted-foreground text-xs">District</p>
                   <p className="text-foreground font-medium">{trail.district}</p>
                 </div>
               )}
-              {trail.trailType && (
+              {trail.type && (
                 <div>
                   <p className="text-muted-foreground text-xs">Type</p>
-                  <p className="text-foreground font-medium">{trail.trailType}</p>
+                  <p className="text-foreground font-medium">{trail.type}</p>
                 </div>
               )}
             </div>
@@ -191,38 +212,50 @@ const TrailDetails = () => {
               label="Duration" 
               value={
                 trail.duration && typeof trail.duration === 'object'
-                  ? `${trail.duration.min_days || 0} - ${trail.duration.max_days || 0} days`
+                  ? `${trail.duration.min_days || 0}-${trail.duration.max_days || 0} days`
                   : trail.duration || 'N/A'
               } 
             />
-            <StatItem 
-              icon={Ruler} 
-              label="Distance" 
-              value={
-                trail.distance && typeof trail.distance === 'object'
-                  ? `${trail.distance.min_km || 0} - ${trail.distance.max_km || 0} km`
-                  : trail.distanceKm ? `${trail.distanceKm} km` : 'N/A'
-              } 
-            />
-            <StatItem 
-              icon={TrendingUp} 
-              label="Max Altitude" 
-              value={
-                trail.altitude && typeof trail.altitude === 'object'
-                  ? `${trail.altitude.max_m ? trail.altitude.max_m.toLocaleString() : 'N/A'} m`
-                  : trail.maxAltitude ? `${trail.maxAltitude.toLocaleString()} m` : 'N/A'
-              } 
-            />
-            <StatItem 
-              icon={DollarSign} 
-              label="Est. Cost" 
-              value={
-                trail.cost && typeof trail.cost === 'object'
-                  ? `${trail.cost.min_npr || 0} - ${trail.cost.max_npr || 0} NPR`
-                  : trail.price ? `$${trail.price}` : 'Contact us'
-              } 
-            />
-            <StatItem icon={Home} label="Accommodation" value={trail.accommodationType || 'Teahouse'} />
+            
+            {trail.distance && (
+              <StatItem 
+                icon={Ruler} 
+                label="Distance" 
+                value={
+                  typeof trail.distance === 'object'
+                    ? `${trail.distance.value || trail.distance.min_km || 0} ${trail.distance.unit || 'km'}`
+                    : `${trail.distance} km`
+                } 
+              />
+            )}
+            
+            {trail.altitude && (
+              <StatItem 
+                icon={TrendingUp} 
+                label="Max Altitude" 
+                value={
+                  typeof trail.altitude === 'object'
+                    ? `${trail.altitude.max_m ? trail.altitude.max_m.toLocaleString() : 'N/A'} m`
+                    : `${trail.altitude.toLocaleString()} m`
+                } 
+              />
+            )}
+            
+            {trail.cost && (
+              <StatItem 
+                icon={DollarSign} 
+                label="Est. Cost" 
+                value={
+                  typeof trail.cost === 'object'
+                    ? `${trail.cost.min_npr || 0}-${trail.cost.max_npr || 0} NPR`
+                    : `NPR ${trail.cost}`
+                } 
+              />
+            )}
+
+            {trail.accommodationType && (
+              <StatItem icon={Home} label="Accommodation" value={trail.accommodationType} />
+            )}
 
           </div>
         </div>
@@ -268,12 +301,22 @@ const TrailDetails = () => {
           <h2 className="text-foreground text-lg font-bold mb-4">Itinerary</h2>
           <div className="space-y-3">
             {itinerary.length > 0 ? (
-              itinerary.map((day, index) => (
+              itinerary.map((item, index) => (
                 <div key={index} className="flex gap-3 p-3 bg-gray-50 rounded-lg border-l-2 border-primary">
                   <div className="shrink-0 w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xs">
                     {index + 1}
                   </div>
-                  <p className="text-foreground text-sm pt-0.5">{day}</p>
+                  <div className="flex-1">
+                    {item.day && <p className="text-foreground text-sm font-semibold">{item.day}</p>}
+                    {item.description && <p className="text-foreground text-sm pt-0.5">{item.description}</p>}
+                    {item.points && item.points.length > 0 && (
+                      <ul className="text-muted-foreground text-xs mt-2 space-y-1 ml-3">
+                        {item.points.map((point, pidx) => (
+                          <li key={pidx} className="list-disc">{point}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
               ))
             ) : (
