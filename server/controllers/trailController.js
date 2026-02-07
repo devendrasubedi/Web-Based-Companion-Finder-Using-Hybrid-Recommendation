@@ -1,4 +1,4 @@
-import { Trail } from '../models/trailModel.js';
+import { Trail, TrailGeoJSON } from '../models/trailModel.js';
 import path from 'path';
 import fs from 'fs';
 import mongoose from 'mongoose';
@@ -37,30 +37,30 @@ export const getAllTrails = async (req, res) => {
         // Fetch images from auth_db separately (since $lookup only works within same database)
         const trailIds = trails.map(t => String(t._id));
         let imagesMap = new Map();
-        
+
         console.log(`[getAllTrails] Fetching images for ${trailIds.length} trails. Trail IDs:`, trailIds.slice(0, 5));
-        
+
         if (trailIds.length > 0) {
             try {
                 const authDbConnection = mongoose.connection.useDb('auth_db');
                 const imagesCollection = authDbConnection.collection('Cloudinary images');
-                
+
                 // First, check if collection exists and has documents
                 const totalDocs = await imagesCollection.countDocuments();
                 console.log(`[getAllTrails] Total documents in 'Cloudinary images' collection: ${totalDocs}`);
-                
+
                 // Fetch all image documents for these trails
-                const imageDocs = await imagesCollection.find({ 
-                    trail_id: { $in: trailIds } 
+                const imageDocs = await imagesCollection.find({
+                    trail_id: { $in: trailIds }
                 }).toArray();
-                
+
                 console.log(`[getAllTrails] Found ${imageDocs.length} matching image documents`);
-                
+
                 // Log sample documents to see structure
                 if (imageDocs.length > 0) {
                     console.log(`[getAllTrails] Sample image document:`, JSON.stringify(imageDocs[0], null, 2));
                 }
-                
+
                 // Create a map of trail_id -> first image URL
                 imageDocs.forEach(doc => {
                     const trailId = String(doc.trail_id);
@@ -68,7 +68,7 @@ export const getAllTrails = async (req, res) => {
                     console.log(`[getAllTrails] Document structure:`, JSON.stringify(doc, null, 2));
                     console.log(`[getAllTrails] Has Images field: ${!!doc.Images}, Is array: ${Array.isArray(doc.Images)}, Length: ${doc.Images?.length || 0}`);
                     console.log(`[getAllTrails] Has images field: ${!!doc.images}, Is array: ${Array.isArray(doc.images)}, Length: ${doc.images?.length || 0}`);
-                    
+
                     // Check for different possible field names (case-insensitive check)
                     let imagesArray = null;
                     if (doc.Images && Array.isArray(doc.Images)) {
@@ -92,7 +92,7 @@ export const getAllTrails = async (req, res) => {
                             console.log(`[getAllTrails] Using first array field: ${arrayKeys[0]}`);
                         }
                     }
-                    
+
                     if (imagesArray && imagesArray.length > 0) {
                         const firstImage = imagesArray[0];
                         imagesMap.set(trailId, firstImage);
@@ -101,7 +101,7 @@ export const getAllTrails = async (req, res) => {
                         console.log(`[getAllTrails] ❌ No valid images array found for trail ${trailId}. Document keys:`, Object.keys(doc));
                     }
                 });
-                
+
                 console.log(`[getAllTrails] Images map size: ${imagesMap.size}, Mapped trails:`, Array.from(imagesMap.keys()));
             } catch (imgErr) {
                 console.error('[getAllTrails] Error fetching images from auth_db:', imgErr.message);
@@ -113,7 +113,7 @@ export const getAllTrails = async (req, res) => {
         let cardData = trails.map(t => {
             const trailId = String(t._id);
             const imageUrl = imagesMap.get(trailId);
-            
+
             const card = {
                 id: t._id,
                 name: t.name,
@@ -125,16 +125,16 @@ export const getAllTrails = async (req, res) => {
                 tags: t.tags || [],
                 rating: t.rating || 4.5
             };
-            
+
             // Log if image is missing
             if (!imageUrl) {
                 console.log(`[getAllTrails] Trail ${trailId} (${t.name}) has no image, using placeholder`);
             }
-            
+
             return card;
         });
-        
-        console.log(`[getAllTrails] Returning ${cardData.length} trails. Sample trail with image:`, 
+
+        console.log(`[getAllTrails] Returning ${cardData.length} trails. Sample trail with image:`,
             cardData.find(t => t.image && !t.image.includes('placeholder')));
 
         // If no trails in database, return sample data
@@ -255,23 +255,23 @@ export const getTrailById = async (req, res) => {
 
         // Try to get the trail
         const trail = await Trail.findById(id).lean();
-        
+
         let images = [];
-        
+
         // If trail exists, try to fetch its images from Cloudinary images collection in auth_db
         if (trail) {
             try {
                 // Get the mongoose connection and switch to auth_db database
                 const authDbConnection = mongoose.connection.useDb('auth_db');
                 const imagesCollection = authDbConnection.collection('Cloudinary images');
-                
+
                 // Convert id to string to match trail_id field type
                 const trailId = String(id);
                 const imageData = await imagesCollection.findOne({ trail_id: trailId });
-                
+
                 console.log(`Searching for images in 'Cloudinary images' for trail ${trailId}`);
                 console.log('Found image data:', imageData ? 'Found document' : 'No document found');
-                
+
                 if (imageData) {
                     console.log('Image document structure:', {
                         hasImages: !!imageData.Images,
@@ -279,7 +279,7 @@ export const getTrailById = async (req, res) => {
                         imagesLength: imageData.Images?.length || 0,
                         sampleImage: imageData.Images?.[0] || 'none'
                     });
-                    
+
                     // Check for different possible field names
                     let imagesArray = null;
                     if (imageData.Images && Array.isArray(imageData.Images)) {
@@ -298,7 +298,7 @@ export const getTrailById = async (req, res) => {
                             console.log(`Using array field: ${arrayKeys[0]}`);
                         }
                     }
-                    
+
                     if (imagesArray && imagesArray.length > 0) {
                         // Return ALL images (not just first 4)
                         images = imagesArray;
@@ -314,10 +314,10 @@ export const getTrailById = async (req, res) => {
                 console.error('Full error:', imgErr);
             }
         }
-        
+
         if (!trail) {
             console.log('Trail not found in database for ID:', id);
-            
+
             // Fallback: Return sample trail data for demo purposes
             const sampleTrails = {
                 'R0001': {
@@ -335,7 +335,7 @@ export const getTrailById = async (req, res) => {
                     rating: 4.9,
                     description: "Walk to the base of the world's highest peak. A challenging trek with spectacular mountain views. This is one of the most popular treks in Nepal, offering breathtaking views of Mount Everest, Lhotse, and Nuptse. The trek passes through Sherpa villages, Buddhist monasteries, and pristine alpine meadows.",
                     accommodationType: "Teahouse",
-                    tags: ["Mountain","Trek","Popular","Everest"],
+                    tags: ["Mountain", "Trek", "Popular", "Everest"],
                     images: [
                         "https://images.unsplash.com/photo-1551632811-561732d1e306?w=800&fit=crop&q=60",
                         "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&fit=crop&q=60",
@@ -377,7 +377,7 @@ export const getTrailById = async (req, res) => {
                     rating: 4.8,
                     description: "Spectacular views of Annapurna I and Machhapuchhre. A moderate trek suitable for most fitness levels. This trek offers some of the best mountain views in the Annapurna Himalayas, with diverse landscapes from lush forests to alpine meadows.",
                     accommodationType: "Teahouse",
-                    tags: ["Mountain","Trek","Scenic","Annapurna"],
+                    tags: ["Mountain", "Trek", "Scenic", "Annapurna"],
                     images: [
                         "https://images.unsplash.com/photo-1533130061792-649d45e41234?w=800&fit=crop&q=60",
                         "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=800&fit=crop&q=60",
@@ -399,20 +399,34 @@ export const getTrailById = async (req, res) => {
                     ]
                 }
             };
-            
+
             const sampleTrail = sampleTrails[id];
             if (sampleTrail) {
                 console.log('Returning sample trail data for demo');
                 return res.status(200).json(sampleTrail);
             }
-            
+
             return res.status(404).json({ message: "Trail not found", id });
         }
 
-        // Add images array to the response
+        // Fetch GeoJSON data
+        let geoJsonData = null;
+        try {
+            geoJsonData = await TrailGeoJSON.findOne({ trail_id: id }).lean();
+            if (geoJsonData) {
+                console.log(`Found GeoJSON for trail ${id}`);
+            } else {
+                console.log(`No GeoJSON found for trail ${id}`);
+            }
+        } catch (geoError) {
+            console.error(`Error fetching GeoJSON for trail ${id}:`, geoError);
+        }
+
+        // Add images and geoJson to the response
         const response = {
             ...trail,
-            images: images.length > 0 ? images : []
+            images: images.length > 0 ? images : [],
+            geoJson: geoJsonData // Attach the fetched GeoJSON
         };
 
         console.log('Returning trail data with images:', response._id, 'Images count:', response.images.length);
@@ -427,17 +441,17 @@ export const getTrailById = async (req, res) => {
 export const getTrailImage = (req, res) => {
     const { trailId } = req.params;
     const localPath = imageCache.get(trailId);
-    
+
     if (!localPath) {
         return res.status(404).json({ message: "Image not found" });
     }
-    
+
     // Convert Windows path to proper file path and construct full path
     const cleanPath = localPath.replace(/\\/g, '/');
-    
+
     // Try multiple possible locations for the images folder
     let fullPath;
-    
+
     // Check if images are in root project folder
     let possiblePath = path.join(process.cwd(), '..', cleanPath);
     if (fs.existsSync(possiblePath)) {
@@ -447,9 +461,9 @@ export const getTrailImage = (req, res) => {
         possiblePath = path.join(process.cwd(), cleanPath);
         fullPath = possiblePath;
     }
-    
+
     console.log('Requested image path:', fullPath);
-    
+
     res.sendFile(fullPath, (err) => {
         if (err) {
             console.error('Error sending image:', err.message);
@@ -457,5 +471,6 @@ export const getTrailImage = (req, res) => {
         }
     });
 };
+
 
 export { imageCache };
