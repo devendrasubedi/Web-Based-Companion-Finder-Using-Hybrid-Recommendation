@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import TrailMap from '../components/map/TrailMap';
+import ElevationChart from '../components/map/ElevationChart';
+// TerrainAnalysis removed
+import WeatherForecast from '../components/TrailDetails/WeatherForecast';
 import {
   MapPin, Star, Heart, Navigation, Calendar, Ruler,
   TrendingUp, DollarSign, Home,
@@ -28,7 +32,7 @@ const TrailDetails = () => {
         setIsLoading(true);
         setError(null);
         const response = await axios.get(`/api/trails/${id}`);
-        console.log('Trail API Response:', response.data);
+        // Logs removed
         setTrail(response.data);
       } catch (err) {
         console.error('Error fetching trail:', err);
@@ -112,9 +116,9 @@ const TrailDetails = () => {
   const heroImages = allImages.slice(0, 3);
   // Remaining images for gallery (if more than 3)
   const galleryImages = allImages.slice(3);
-  
+
   const tags = trail?.tags || [];
-  
+
   // Handle itinerary - can be array of objects or strings
   const itinerary = (trail?.itinerary || []).map(item => {
     if (typeof item === 'string') {
@@ -122,13 +126,10 @@ const TrailDetails = () => {
     }
     return item;
   });
-  
+
   const reviews = trail?.reviews || [];
 
-  console.log('Trail data:', trail);
-  console.log('All images:', allImages);
-  console.log('Hero images:', heroImages);
-  console.log('Gallery images:', galleryImages);
+
 
   return (
     <div className="min-h-screen bg-background pb-12 pt-4">
@@ -231,7 +232,7 @@ const TrailDetails = () => {
                 <div>
                   <p className="text-muted-foreground text-xs">Location</p>
                   <p className="text-foreground font-medium">
-                    {typeof trail.location === 'object' 
+                    {typeof trail.location === 'object'
                       ? `${trail.location.start || ''} - ${trail.location.end || ''}`
                       : trail.location
                     }
@@ -296,49 +297,49 @@ const TrailDetails = () => {
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
 
             {/* Helper Component for Stats to reduce code repetition */}
-            <StatItem 
-              icon={Calendar} 
-              label="Duration" 
+            <StatItem
+              icon={Calendar}
+              label="Duration"
               value={
                 trail.duration && typeof trail.duration === 'object'
                   ? `${trail.duration.min_days || 0}-${trail.duration.max_days || 0} days`
                   : trail.duration || 'N/A'
-              } 
+              }
             />
-            
+
             {trail.distance && (
-              <StatItem 
-                icon={Ruler} 
-                label="Distance" 
+              <StatItem
+                icon={Ruler}
+                label="Distance"
                 value={
                   typeof trail.distance === 'object'
                     ? `${trail.distance.value || trail.distance.min_km || 0} ${trail.distance.unit || 'km'}`
                     : `${trail.distance} km`
-                } 
+                }
               />
             )}
-            
+
             {trail.altitude && (
-              <StatItem 
-                icon={TrendingUp} 
-                label="Max Altitude" 
+              <StatItem
+                icon={TrendingUp}
+                label="Max Altitude"
                 value={
                   typeof trail.altitude === 'object'
                     ? `${trail.altitude.max_m ? trail.altitude.max_m.toLocaleString() : 'N/A'} m`
                     : `${trail.altitude.toLocaleString()} m`
-                } 
+                }
               />
             )}
-            
+
             {trail.cost && (
-              <StatItem 
-                icon={DollarSign} 
-                label="Est. Cost" 
+              <StatItem
+                icon={DollarSign}
+                label="Est. Cost"
                 value={
                   typeof trail.cost === 'object'
                     ? `${trail.cost.min_npr || 0}-${trail.cost.max_npr || 0} NPR`
                     : `NPR ${trail.cost}`
-                } 
+                }
               />
             )}
 
@@ -375,8 +376,8 @@ const TrailDetails = () => {
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {galleryImages.slice(0, 4).map((img, index) => (
-                  <div 
-                    key={index} 
+                  <div
+                    key={index}
                     className="rounded-lg overflow-hidden h-32 shadow-sm cursor-pointer hover:scale-105 transition-transform duration-300"
                     onClick={() => {
                       setShowImageGallery(true);
@@ -398,18 +399,34 @@ const TrailDetails = () => {
           )}
         </div>
 
-        {/* --- SECTION 4: MAP (Kept Large as Requested) --- */}
+        {/* --- SECTION 4: MAP & ANALYSIS --- */}
         <div ref={mapSectionRef} className="bg-white rounded-xl shadow-sm border border-border p-5 mb-6">
-          <h2 className="text-foreground text-lg font-bold mb-4">Interactive Map</h2>
+          <div className="flex flex-col lg:flex-row gap-6 h-[600px] lg:h-[500px]">
+            {/* Map Container */}
+            <div className="flex-1 h-full min-h-[300px] rounded-lg overflow-hidden border border-border relative z-0">
+              <TrailMap geoJson={trail.geoJson} startLocation={trail.location} />
+            </div>
 
-          {/* BACKEND TODO: Insert Google Maps / Leaflet Component Here */}
-          <div className="w-full h-[50vh] min-h-[350px] bg-muted/20 rounded-lg flex items-center justify-center border-2 border-dashed border-border">
-            <div className="text-center">
-              <MapPin className="w-10 h-10 text-muted-foreground/40 mx-auto mb-2" />
-              <p className="text-foreground font-medium text-sm">Map View Loading...</p>
-              <p className="text-muted-foreground text-xs">Lat: {trail.latitude || '-'}, Long: {trail.longitude || '-'}</p>
+            {/* Elevation & Stats Panel */}
+            <div className="lg:w-1/3 flex flex-col gap-4">
+              {/* Elevation Chart */}
+              <div className="h-full bg-gray-50 rounded-lg p-3 border border-border flex flex-col">
+                <h3 className="text-sm font-bold text-foreground mb-2 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-primary" /> Elevation Profile
+                </h3>
+                <div className="flex-1 w-full min-h-0">
+                  <ElevationChart geoJson={trail.geoJson} trailData={trail} />
+                </div>
+              </div>
+
             </div>
           </div>
+        </div>
+
+        {/* --- SECTION 5: WEATHER FORECAST --- */}
+        <div className="bg-white rounded-xl shadow-sm border border-border p-5 mb-6">
+          {/* Use latitude/longitude from trail data for accurate weather */}
+          <WeatherForecast lat={trail.latitude || 27.7172} lng={trail.longitude || 85.3240} />
         </div>
 
         {/* --- SECTION 5: COMPACT ITINERARY --- */}
@@ -563,11 +580,10 @@ const TrailDetails = () => {
                   <button
                     key={index}
                     onClick={() => setSelectedImageIndex(index)}
-                    className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
-                      index === selectedImageIndex
-                        ? 'border-white scale-110'
-                        : 'border-white/30 hover:border-white/60'
-                    }`}
+                    className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${index === selectedImageIndex
+                      ? 'border-white scale-110'
+                      : 'border-white/30 hover:border-white/60'
+                      }`}
                   >
                     <img
                       src={img}
