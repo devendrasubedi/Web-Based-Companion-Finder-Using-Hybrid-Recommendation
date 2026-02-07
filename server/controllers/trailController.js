@@ -14,166 +14,18 @@ const imageCache = new Map();
 // Returns a compact set of fields tailored for the front-end cards and search/filter
 export const getAllTrails = async (req, res) => {
     try {
-        // First, get all trails
-        const trails = await Trail.aggregate([
-            // Optimization: Limit number of trails fetched for homepage performance
-            { $limit: 20 },
-            // Keep only necessary fields
-            { $project: { name: 1, difficulty: 1, description: 1, location: 1, duration: 1, tags: 1, rating: 1 } },
-            {
-                $addFields: {
-                    durationDays: { $ifNull: ["$duration.min_days", null] }
-                }
-            },
-            // Shape fields for the client
-            {
-                $project: {
-                    _id: 1,
-                    name: 1,
-                    difficulty: 1,
-                    description: 1,
-                    location: 1,
-                    duration: { $cond: [{ $ifNull: ["$durationDays", false] }, { $concat: [{ $toString: "$durationDays" }, " days"] }, null] },
-                    tags: 1
-                }
-            }
-        ]);
+        // .select() ensures we only get the fields needed for the card
+        // This makes the API response much faster!
+        const trails = await Trail.find({}).select('name distance duration');
 
-        // Fetch images later via batch endpoint to improve performance
-        // const trailIds = trails.map(t => String(t._id));
-        // let imagesMap = new Map();
-
-
-        // Map to simpler keys the client expects and add images
-        let cardData = trails.map(t => {
-            const trailId = String(t._id);
-            // const imageUrl = imagesMap.get(trailId);
-
-            const card = {
-                id: t._id,
-                name: t.name,
-                difficulty: t.difficulty,
-                description: t.description,
-                location: (t.location && (t.location.start || (t.location.provinces && t.location.provinces[0]) || '')) || '',
-                duration: t.duration || 'N/A',
-                image: "https://via.placeholder.com/600x400?text=Loading...", // Placeholder
-                tags: t.tags || [],
-                rating: t.rating || 4.5
-            };
-
-            // Log if image is missing
-            // if (!imageUrl) {
-            //    console.log(`[getAllTrails] Trail ${trailId} (${t.name}) has no image, using placeholder`);
-            // }
-
-            return card;
-        });
-
-        console.log(`[getAllTrails] Returning ${cardData.length} trails.`);
-
-
-        // If no trails in database, return sample data
-        if (cardData.length === 0) {
-            console.log('No trails in database, returning sample data');
-            cardData = [
-                {
-                    id: 'R0001',
-                    name: "Everest Base Camp",
-                    location: "Solukhumbu",
-                    province: "Koshi",
-                    difficulty: "hard",
-                    description: "Walk to the base of the world's highest peak.",
-                    duration: "12 days",
-                    image: "https://images.unsplash.com/photo-1551632811-561732d1e306?w=800&fit=crop&q=60",
-                    rating: 4.9,
-                    tags: ["Mountain", "Trek"]
-                },
-                {
-                    id: 'R0002',
-                    name: "Annapurna Base Camp",
-                    location: "Kaski",
-                    province: "Gandaki",
-                    difficulty: "moderate",
-                    description: "Spectacular views of Annapurna I and Machhapuchhre.",
-                    duration: "8 days",
-                    image: "https://images.unsplash.com/photo-1533130061792-649d45e41234?w=800&fit=crop&q=60",
-                    rating: 4.8,
-                    tags: ["Mountain", "Trek"]
-                },
-                {
-                    id: 'R0003',
-                    name: "Langtang Valley",
-                    location: "Rasuwa",
-                    province: "Bagmati",
-                    difficulty: "hard",
-                    description: "The valley of glaciers, rich in Tamang culture.",
-                    duration: "6 days",
-                    image: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800&fit=crop&q=60",
-                    rating: 4.7,
-                    tags: ["Valley", "Trek"]
-                },
-                {
-                    id: 'R0004',
-                    name: "Ghorepani Poon Hill",
-                    location: "Myagdi",
-                    province: "Gandaki",
-                    difficulty: "easy",
-                    description: "Famous for sunrise views over the Himalayas.",
-                    duration: "4 days",
-                    image: "https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?w=800&fit=crop&q=60",
-                    rating: 4.6,
-                    tags: ["Trek", "Views"]
-                },
-                {
-                    id: 'R0005',
-                    name: "Makalu Base Camp",
-                    location: "Sankhuwasabha",
-                    province: "Koshi",
-                    difficulty: "hard",
-                    description: "Trek to the base of Mt. Makalu with stunning mountain views.",
-                    duration: "18 days",
-                    image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=800&fit=crop&q=60",
-                    rating: 4.8,
-                    tags: ["Mountain", "Trek"]
-                },
-                {
-                    id: 'R0006',
-                    name: "Mardi Himal",
-                    location: "Kaski",
-                    province: "Gandaki",
-                    difficulty: "moderate",
-                    description: "Off-the-beaten-path trek with Machhapuchhre views.",
-                    duration: "4 days",
-                    image: "https://images.unsplash.com/photo-1626014903700-1c97a8e02d82?w=800&fit=crop&q=60",
-                    rating: 4.7,
-                    tags: ["Trek", "Scenic"]
-                },
-                {
-                    id: 'R0007',
-                    name: "Gosaikunda Lake",
-                    location: "Rasuwa",
-                    province: "Bagmati",
-                    difficulty: "hard",
-                    description: "Sacred alpine freshwater lakes with beautiful surroundings.",
-                    duration: "5 days",
-                    image: "https://images.unsplash.com/photo-1542815965-ea7e5ad4269c?w=800&fit=crop&q=60",
-                    rating: 4.8,
-                    tags: ["Lake", "Trek"]
-                },
-                {
-                    id: 'R0008',
-                    name: "Rara Lake",
-                    location: "Mugu",
-                    province: "Karnali",
-                    difficulty: "moderate",
-                    description: "The largest and deepest lake in Nepal with cultural significance.",
-                    duration: "8 days",
-                    image: "https://images.unsplash.com/photo-1533130061792-649d45e41234?w=800&fit=crop&q=60",
-                    rating: 4.6,
-                    tags: ["Lake", "Trek"]
-                }
-            ];
-        }
+        // Map the results to send basic trail data for cards
+        const cardData = trails.map(trail => ({
+            _id: trail._id,
+            name: trail.name,
+            distance: trail.distance?.min_km || 0,
+            duration: trail.duration?.min_days || 0,
+            thumbnail: 'default.jpg'
+        }));
 
         res.status(200).json(cardData);
     } catch (error) {
