@@ -37,25 +37,70 @@ const HomePage = ({ userName = "Traveler" }) => {
       try {
         setIsLoading(true);
         setError(null);
-        const [trailsResp, usersResp] = await Promise.all([
-          axios.get('/api/trails'),
-          axios.get('/api/users')
+
+        // Standard Pattern: Fetch dependent data in parallel
+        // We use Promise.allSettled to ensure one failure doesn't block the other content
+        const [trailsResult, usersResult] = await Promise.allSettled([
+            axios.get('/api/trails'),
+            axios.get('/api/users')
         ]);
 
-        console.log('Trails:', trailsResp.data);
-        console.log('Users:', usersResp.data);
+        // Process Trails
+        if (trailsResult.status === 'fulfilled') {
+            const initialTrails = (trailsResult.value.data || []).map(t => {
+                // INSTANT LOAD from LocalStorage
+                try {
+                    const cachedImages = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
+                    if (cachedImages[t.id]) {
+                        return { ...t, image: cachedImages[t.id] };
+                    }
+                } catch(e) {/* ignore */}
+                return t;
+            });
+            setTrails(initialTrails);
 
-        setTrails(trailsResp.data || []);
-        setUsers((usersResp.data || []).map(u => ({ 
-          id: u._id || u.id, 
-          name: u.name || 'Trekker',
-          province: u.province || 'Nepal',
-          district: u.district || 'Unknown'
-        })));
+            // Lazy Load Images in Background
+            if (initialTrails.length > 0) {
+                const trailIds = initialTrails.map(t => t.id);
+                // Non-blocking call
+                axios.post('/api/trails/batch-images', { ids: trailIds })
+                    .then(imgResp => {
+                        const imagesMap = imgResp.data;
+                        try {
+                            const currentCache = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
+                            localStorage.setItem('trail_images_cache', JSON.stringify({ ...currentCache, ...imagesMap }));
+                        } catch(e) {/* ignore */}
+
+                        setTrails(prevTrails => prevTrails.map(t => {
+                            const newImage = imagesMap[String(t.id)];
+                            return newImage ? { ...t, image: newImage } : t;
+                        }));
+                    })
+                    .catch(e => console.error("Background image fetch failed", e));
+            }
+        } else {
+            console.error('Trails fetch failed:', trailsResult.reason);
+            setError("Failed to load trails. Please try again.");
+        }
+
+        // Process Users
+        if (usersResult.status === 'fulfilled') {
+            setUsers((usersResult.value.data || []).map(u => ({ 
+                id: u._id || u.id, 
+                name: u.name || 'Trekker',
+                province: u.province || 'Nepal',
+                district: u.district || 'Unknown'
+            })));
+        } else {
+            console.error('Users fetch failed:', usersResult.reason);
+            // We don't block the page if users fail, just log it
+        }
+
       } catch (err) {
-        console.error('Error fetching homepage data:', err);
+        console.error('Unexpected error in fetchData:', err);
         setError(err.message);
       } finally {
+        // ALWAYS turn off loading, even if errors occurred
         setIsLoading(false);
       }
     };

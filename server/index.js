@@ -33,7 +33,20 @@ console.log('✓ User routes mounted at /api/users');
 app.use("/api/trails", trailRoutes);
 console.log('✓ Trail routes mounted at /api/trails');
 
-app.listen(PORT, () => {
-  connectDB()
-  console.log(`Example app listening on port ${PORT}`)
-})
+// app.listen(PORT, () => {
+//   connectDB()
+//   console.log(`Example app listening on port ${PORT}`)
+// })
+const startServer = async () => {
+  try {
+    await connectDB();
+    app.listen(PORT, () => {
+      console.log(`Server listening on port ${PORT}`)
+    })
+  } catch (error) {
+    console.log("Failed to start server:", error)
+    process.exit(1)
+  }
+}
+
+startServer()

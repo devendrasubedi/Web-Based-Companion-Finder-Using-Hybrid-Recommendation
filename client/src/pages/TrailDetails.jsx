@@ -31,15 +31,46 @@ const TrailDetails = () => {
       try {
         setIsLoading(true);
         setError(null);
+        
+        // 1. Fetch Core Data (Fastest - Text only)
+        // We await this because we need the basic trail structure to render the page layout
         const response = await axios.get(`/api/trails/${id}`);
-        // Logs removed
-        setTrail(response.data);
+        const trailData = response.data;
+        setTrail(trailData);
+        setIsLoading(false); // Show content immediately
+
+        // 2. Fire-and-forget lazy loaders for heavy assets (Images and Map)
+        // We do NOT await these together, they run in parallel and update state independently
+        
+        // Load Images
+        const loadImages = async () => {
+            try {
+                const mediaResp = await axios.get(`/api/trails/${id}/media`);
+                if (mediaResp.data.images && mediaResp.data.images.length > 0) {
+                     setTrail(prev => ({ ...prev, images: mediaResp.data.images }));
+                }
+            } catch (ignored) { console.warn("Image fetch failed", ignored); }
+        };
+
+        // Load Map Data
+        const loadMap = async () => {
+             try {
+                const mapResp = await axios.get(`/api/trails/${id}/map`);
+                if (mapResp.data.geoJson) {
+                    setTrail(prev => ({ ...prev, geoJson: mapResp.data.geoJson }));
+                }
+             } catch (ignored) { console.warn("Map fetch failed", ignored); }
+        };
+
+        // Start both independent fetches
+        loadImages();
+        loadMap();
+
       } catch (err) {
         console.error('Error fetching trail:', err);
         setError(err.message || 'Failed to load trail details');
-      } finally {
         setIsLoading(false);
-      }
+      } 
     };
     if (id) {
       fetchTrail();

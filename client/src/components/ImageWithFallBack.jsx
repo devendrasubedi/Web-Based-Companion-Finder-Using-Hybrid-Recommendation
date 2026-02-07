@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Image } from 'lucide-react';
 
 const ImageWithFallback = ({ src, alt, className, fallbackSrc }) => {
   const [error, setError] = useState(false);
+
+  useEffect(() => {
+    setError(false);
+  }, [src]);
 
   // Default fallback is a simple gray div with an icon, or a provided url
   if (error) {
