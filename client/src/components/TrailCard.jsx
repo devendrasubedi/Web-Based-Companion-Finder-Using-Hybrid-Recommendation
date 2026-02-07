@@ -5,6 +5,8 @@ import ImageWithFallback from './ImageWithFallBack';
 const TrailCard = ({ trail, onClick }) => {
   if (!trail) return null;
 
+  console.log('TrailCard received:', trail);
+
   return (
     <div
       onClick={onClick}
@@ -26,7 +28,7 @@ const TrailCard = ({ trail, onClick }) => {
       </div>
 
       {/* Content Container */}
-      <div className="p-3 sm:p-4 flex flex-col flex-grow">
+      <div className="p-3 sm:p-4 flex flex-col grow">
         {/* Location */}
         <div className="flex items-center gap-1 text-gray-500 text-[10px] sm:text-xs mb-1 uppercase tracking-wide font-medium">
           <MapPin className="w-3 h-3" />

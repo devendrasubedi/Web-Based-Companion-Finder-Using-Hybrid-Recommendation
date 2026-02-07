@@ -52,7 +52,7 @@ const MainLayout = () => {
 	return (
 		<div className="min-h-screen bg-gray-50 flex flex-col">
 			<NavBar />
-			<main className="flex-grow">
+			<main className="grow">
 				<Outlet />
 			</main>
 			<Footer />
@@ -62,7 +62,7 @@ const MainLayout = () => {
 
 const AuthLayout = () => {
 	return (
-		<div className='min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-emerald-900 flex items-center justify-center relative overflow-hidden'>
+		<div className='min-h-screen bg-linear-to-br from-gray-900 via-green-900 to-emerald-900 flex items-center justify-center relative overflow-hidden'>
 			<div className='absolute inset-0 overflow-hidden'>
 				<div className='absolute -top-40 -left-40 w-80 h-80 border-4 border-emerald-500 rounded-full opacity-10 animate-blob'></div>
 				<div className='absolute top-0 -right-20 w-80 h-80 border-4 border-emerald-500 rounded-full opacity-10 animate-blob animation-delay-2000'></div>

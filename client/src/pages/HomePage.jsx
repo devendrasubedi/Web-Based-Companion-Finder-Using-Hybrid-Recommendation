@@ -4,13 +4,19 @@ import { ChevronLeft, ChevronRight, Search, Mountain } from 'lucide-react';
 import ImageWithFallback from '../components/ImageWithFallBack';
 import TrailCard from '../components/TrailCard';
 import ProfileCard from '../components/ProfileCard';
-import { mockTrails, mockUsers } from '../data/mockData';
 import Footer from '../components/Footer';
+import { useEffect, useState } from 'react';
+import axios from 'axios';
 
 const HomePage = ({ userName = "Traveler" }) => {
   const navigate = useNavigate();
   const friendScrollRef = useRef(null);
   const popularScrollRef = useRef(null);
+
+  const [trails, setTrails] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const scroll = (ref, direction) => {
     if (ref.current) {
@@ -22,20 +28,119 @@ const HomePage = ({ userName = "Traveler" }) => {
     }
   };
 
-  const recommendedTrails = mockTrails.slice(0, 13);
-  const popularTrails = mockTrails.slice(5);
-  const recommendedFriends = mockUsers;
+  const recommendedTrails = trails.slice(0, 13);
+  const popularTrails = trails.slice(5);
+  const recommendedFriends = users;
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // Standard Pattern: Fetch dependent data in parallel
+        // We use Promise.allSettled to ensure one failure doesn't block the other content
+        const [trailsResult, usersResult] = await Promise.allSettled([
+            axios.get('/api/trails'),
+            axios.get('/api/users')
+        ]);
+
+        // Process Trails
+        if (trailsResult.status === 'fulfilled') {
+            const initialTrails = (trailsResult.value.data || []).map(t => {
+                // INSTANT LOAD from LocalStorage
+                try {
+                    const cachedImages = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
+                    if (cachedImages[t.id]) {
+                        return { ...t, image: cachedImages[t.id] };
+                    }
+                } catch(e) {/* ignore */}
+                return t;
+            });
+            setTrails(initialTrails);
+
+            // Lazy Load Images in Background
+            if (initialTrails.length > 0) {
+                const trailIds = initialTrails.map(t => t.id);
+                // Non-blocking call
+                axios.post('/api/trails/batch-images', { ids: trailIds })
+                    .then(imgResp => {
+                        const imagesMap = imgResp.data;
+                        try {
+                            const currentCache = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
+                            localStorage.setItem('trail_images_cache', JSON.stringify({ ...currentCache, ...imagesMap }));
+                        } catch(e) {/* ignore */}
+
+                        setTrails(prevTrails => prevTrails.map(t => {
+                            const newImage = imagesMap[String(t.id)];
+                            return newImage ? { ...t, image: newImage } : t;
+                        }));
+                    })
+                    .catch(e => console.error("Background image fetch failed", e));
+            }
+        } else {
+            console.error('Trails fetch failed:', trailsResult.reason);
+            setError("Failed to load trails. Please try again.");
+        }
+
+        // Process Users
+        if (usersResult.status === 'fulfilled') {
+            setUsers((usersResult.value.data || []).map(u => ({ 
+                id: u._id || u.id, 
+                name: u.name || 'Trekker',
+                province: u.province || 'Nepal',
+                district: u.district || 'Unknown'
+            })));
+        } else {
+            console.error('Users fetch failed:', usersResult.reason);
+            // We don't block the page if users fail, just log it
+        }
+
+      } catch (err) {
+        console.error('Unexpected error in fetchData:', err);
+        setError(err.message);
+      } finally {
+        // ALWAYS turn off loading, even if errors occurred
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+          <p className="text-muted-foreground">Loading trails and trekkers...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <p className="text-red-500 font-semibold mb-2">Error loading data</p>
+          <p className="text-muted-foreground text-sm">{error}</p>
+          <p className="text-xs text-muted-foreground mt-4">Make sure the backend server is running on port 5000</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pt-0">
       {/* Hero Section */}
-      <div className="relative h-[250px] sm:h-[320px] lg:h-[380px] overflow-hidden">
+      <div className="relative h-[250px] sm:h-80 lg:h-[380px] overflow-hidden">
         <ImageWithFallback
           src="https://images.unsplash.com/photo-1542815965-ea7e5ad4269c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxuZXBhbCUyMHByYXllciUyMGZsYWdzfGVufDF8fHx8MTc2NTAwMDg2M3ww&ixlib=rb-4.1.0&q=80&w=1080"
           alt="Nepal Mountains"
           className="w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/70" />
+        <div className="absolute inset-0 bg-linear-to-b from-black/30 via-black/40 to-black/70" />
         <div className="absolute inset-0 flex items-center justify-center p-4">
           <div className="max-w-4xl w-full text-center flex flex-col items-center space-y-2 sm:space-y-4">
 

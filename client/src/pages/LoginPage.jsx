@@ -39,7 +39,7 @@ const LoginPage = () => {
 	};
 
 	return (
-		<div className="h-screen flex items-center justify-center px-4 py-3 bg-gradient-to-br from-primary via-secondary to-accent relative overflow-hidden">
+		<div className="min-h-screen flex items-center justify-center p-4 bg-linear-to-br from-primary via-secondary to-accent relative overflow-hidden">
 			{/* Decorative Elements */}
 			<div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
 				<div className="absolute top-20 left-10 w-72 h-72 bg-white rounded-full blur-3xl" />
