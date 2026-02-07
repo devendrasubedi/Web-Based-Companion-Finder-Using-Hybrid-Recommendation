@@ -53,6 +53,19 @@ const ExploreSearchPage = () => {
     fetchTrails();
   }, []);
 
+  // Normalize difficulty from API to match filter labels (Easy, Moderate, Challenging, Difficult)
+  const normalizeDifficulty = (d) => {
+    if (d == null) return '';
+    const raw = String(d).trim();
+    if (!raw || raw === '[object Object]') return '';
+    const lower = raw.toLowerCase();
+    if (lower === 'hard' || lower === 'difficult') return 'difficult';
+    if (lower === 'moderate' || lower === 'medium') return 'moderate';
+    if (lower === 'easy') return 'easy';
+    if (lower === 'challenging') return 'challenging';
+    return lower;
+  };
+
   // Filter Logic
   const filteredTrails = allTrails.filter(trail => {
     // Safety check - ensure trail exists
@@ -62,48 +75,60 @@ const ExploreSearchPage = () => {
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = !searchQuery ||
       (trail.name && trail.name.toLowerCase().includes(searchLower)) ||
-      (trail.location && trail.location.toLowerCase().includes(searchLower)) ||
+      (trail.location && String(trail.location).toLowerCase().includes(searchLower)) ||
       (trail.description && trail.description.toLowerCase().includes(searchLower));
 
-    // Province/Location - check multiple possible fields
+    // Province - API now returns province; also check location string
     let matchesProvince = selectedProvince === 'All';
     if (!matchesProvince) {
-      matchesProvince = 
-        (trail.province && trail.province === selectedProvince) ||
-        (trail.location && trail.location === selectedProvince) ||
-        (trail.location && trail.location.includes(selectedProvince)) ||
-        (trail.region && trail.region.includes(selectedProvince));
+      const trailProvince = (trail.province || '').trim();
+      const trailLocation = (trail.location || '').trim();
+      matchesProvince =
+        trailProvince === selectedProvince ||
+        trailLocation === selectedProvince ||
+        trailLocation.toLowerCase().includes(selectedProvince.toLowerCase()) ||
+        (trail.region && String(trail.region).includes(selectedProvince));
     }
 
-    // Difficulty - handle case-insensitive comparison
-    const trailDifficulty = trail.difficulty ? trail.difficulty.toLowerCase() : '';
-    const filterDifficulty = selectedDifficulty.toLowerCase();
-    const matchesDifficulty = selectedDifficulty === 'All' || trailDifficulty === filterDifficulty;
+    // Difficulty - normalize API values (hard -> difficult, etc.) to match filter
+    const trailDifficultyNorm = normalizeDifficulty(trail.difficulty);
+    const filterDifficultyNorm = (selectedDifficulty || '').toString().trim().toLowerCase();
+    const hasDifficulty = trail.difficulty != null && String(trail.difficulty).trim() !== '';
+    const matchesDifficulty =
+      selectedDifficulty === 'All' ||
+      (hasDifficulty && (trailDifficultyNorm === filterDifficultyNorm || (trail.difficulty && String(trail.difficulty).trim().toLowerCase() === filterDifficultyNorm)));
 
-    // Duration matching
+    // Duration matching - if duration is missing or N/A, include trail in all duration filters
     let matchesDays = true;
-    if (selectedDays !== 'All' && trail.duration) {
-      // Extract days from strings like "7-10 Days", "3-5 Days", "12 days"
-      const daysMatch = trail.duration.match(/(\d+)/);
-      const days = daysMatch ? parseInt(daysMatch[1]) : 0;
-      
-      if (selectedDays === '1-5 days') matchesDays = days >= 1 && days <= 5;
-      else if (selectedDays === '5-10 days') matchesDays = days > 5 && days <= 10;
-      else if (selectedDays === '10-15 days') matchesDays = days > 10 && days <= 15;
-      else if (selectedDays === '15-20 days') matchesDays = days > 15 && days <= 20;
-      else if (selectedDays === '20+ days') matchesDays = days > 20;
+    if (selectedDays !== 'All') {
+      const durationStr = trail.duration && String(trail.duration);
+      if (!durationStr || durationStr === 'N/A' || durationStr.toLowerCase().includes('n/a')) {
+        matchesDays = true; // unknown duration: show in any duration filter
+      } else {
+        const daysMatch = durationStr.match(/(\d+)/);
+        const days = daysMatch ? parseInt(daysMatch[1], 10) : 0;
+        if (selectedDays === '1-5 days') matchesDays = days >= 1 && days <= 5;
+        else if (selectedDays === '5-10 days') matchesDays = days > 5 && days <= 10;
+        else if (selectedDays === '10-15 days') matchesDays = days > 10 && days <= 15;
+        else if (selectedDays === '15-20 days') matchesDays = days > 15 && days <= 20;
+        else if (selectedDays === '20+ days') matchesDays = days > 20;
+      }
     }
 
-
-    // Budget Logic
+    // Budget - use cost_min/cost_max (NPR). If no cost, show trail for any budget filter.
     let matchesBudget = true;
     if (selectedBudget !== 'All') {
-      const priceString = String(trail.price || trail.cost || '0').replace(/[^0-9.]/g, '');
-      const price = parseFloat(priceString);
-
-      if (selectedBudget === 'Low') matchesBudget = price < 500;
-      else if (selectedBudget === 'Medium') matchesBudget = price >= 500 && price <= 1500;
-      else if (selectedBudget === 'High') matchesBudget = price > 1500;
+      const costMin = trail.cost_min ?? trail.cost?.min_npr;
+      const costMax = trail.cost_max ?? trail.cost?.max_npr;
+      const price = typeof costMin === 'number' ? costMin : (typeof costMax === 'number' ? costMax : null);
+      if (price == null) {
+        matchesBudget = true; // no cost data: include in all budget filters
+      } else {
+        // NPR ranges: Low < 50k, Medium 50k-150k, High > 150k
+        if (selectedBudget === 'Low') matchesBudget = price < 50000;
+        else if (selectedBudget === 'Medium') matchesBudget = price >= 50000 && price <= 150000;
+        else if (selectedBudget === 'High') matchesBudget = price > 150000;
+      }
     }
 
     return matchesSearch && matchesProvince && matchesDifficulty && matchesDays && matchesBudget;

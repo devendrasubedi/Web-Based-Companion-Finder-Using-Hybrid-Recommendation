@@ -13,8 +13,8 @@ export const getAllTrails = async (req, res) => {
     try {
         // First, get all trails
         const trails = await Trail.aggregate([
-            // Keep only necessary fields
-            { $project: { name: 1, difficulty: 1, description: 1, location: 1, duration: 1, tags: 1, rating: 1 } },
+            // Keep only necessary fields (include cost and full location for filters)
+            { $project: { name: 1, difficulty: 1, description: 1, location: 1, duration: 1, tags: 1, rating: 1, cost: 1 } },
             {
                 $addFields: {
                     durationDays: { $ifNull: ["$duration.min_days", null] }
@@ -29,7 +29,9 @@ export const getAllTrails = async (req, res) => {
                     description: 1,
                     location: 1,
                     duration: { $cond: [{ $ifNull: ["$durationDays", false] }, { $concat: [{ $toString: "$durationDays" }, " days"] }, null] },
-                    tags: 1
+                    tags: 1,
+                    rating: 1,
+                    cost: 1
                 }
             }
         ]);
@@ -120,10 +122,14 @@ export const getAllTrails = async (req, res) => {
                 difficulty: t.difficulty,
                 description: t.description,
                 location: (t.location && (t.location.start || (t.location.provinces && t.location.provinces[0]) || '')) || '',
+                province: (t.location && t.location.provinces && t.location.provinces[0]) || '',
                 duration: t.duration || 'N/A',
                 image: imageUrl || "https://via.placeholder.com/600x400?text=Trail",
                 tags: t.tags || [],
-                rating: t.rating || 4.5
+                rating: t.rating || 4.5,
+                cost: t.cost,
+                cost_min: t.cost?.min_npr,
+                cost_max: t.cost?.max_npr
             };
             
             // Log if image is missing
@@ -151,7 +157,9 @@ export const getAllTrails = async (req, res) => {
                     duration: "12 days",
                     image: "https://images.unsplash.com/photo-1551632811-561732d1e306?w=800&fit=crop&q=60",
                     rating: 4.9,
-                    tags: ["Mountain", "Trek"]
+                    tags: ["Mountain", "Trek"],
+                    cost_min: 80000,
+                    cost_max: 150000
                 },
                 {
                     id: 'R0002',
