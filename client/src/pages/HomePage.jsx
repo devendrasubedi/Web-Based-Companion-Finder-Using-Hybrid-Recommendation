@@ -37,25 +37,55 @@ const HomePage = ({ userName = "Traveler" }) => {
       try {
         setIsLoading(true);
         setError(null);
-        const [trailsResp, usersResp] = await Promise.all([
-          axios.get('/api/trails'),
-          axios.get('/api/users')
-        ]);
+        
+        // 1. Decoupled fetching - Start both requests but don't hold one for the other
+        // Fetch trails first as they are the main content
+        const trailsPromise = axios.get('/api/trails')
+            .then(async (trailsResp) => {
+                const initialTrails = trailsResp.data || [];
+                setTrails(initialTrails);
+                
+                // Once we have trails, stop loading spinner so user sees structure
+                setIsLoading(false); 
 
-        console.log('Trails:', trailsResp.data);
-        console.log('Users:', usersResp.data);
+                // 2. Fetch Images in Background (Lazy Load) AFTER trails render
+                if (initialTrails.length > 0) {
+                    const trailIds = initialTrails.map(t => t.id);
+                    try {
+                        const imgResp = await axios.post('/api/trails/batch-images', { ids: trailIds });
+                        const imagesMap = imgResp.data;
+                        
+                        setTrails(prevTrails => prevTrails.map(t => {
+                           const newImage = imagesMap[String(t.id)];
+                           return newImage ? { ...t, image: newImage } : t;
+                        }));
+                    } catch (imgErr) {
+                        console.error("Background image fetch failed:", imgErr);
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Error fetching trails:', err);
+                setError(err.message);
+                setIsLoading(false);
+            });
 
-        setTrails(trailsResp.data || []);
-        setUsers((usersResp.data || []).map(u => ({ 
-          id: u._id || u.id, 
-          name: u.name || 'Trekker',
-          province: u.province || 'Nepal',
-          district: u.district || 'Unknown'
-        })));
+        // Fetch users independently
+        axios.get('/api/users')
+            .then(usersResp => {
+                setUsers((usersResp.data || []).map(u => ({ 
+                  id: u._id || u.id, 
+                  name: u.name || 'Trekker',
+                  province: u.province || 'Nepal',
+                  district: u.district || 'Unknown'
+                })));
+            })
+            .catch(err => console.error("Error fetching users:", err));
+
+        await trailsPromise; // Wait for trails at least before saying "done" with the main effect hook
+
       } catch (err) {
-        console.error('Error fetching homepage data:', err);
-        setError(err.message);
-      } finally {
+        console.error('Error in fetchData setup:', err);
         setIsLoading(false);
       }
     };
