@@ -4,7 +4,7 @@ import axios from 'axios';
 import {
   MapPin, Star, Heart, Navigation, Calendar, Ruler,
   TrendingUp, DollarSign, Home,
-  User, ArrowRight, ArrowLeft
+  User, ArrowRight, ArrowLeft, X, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 const TrailDetails = () => {
@@ -15,6 +15,8 @@ const TrailDetails = () => {
   const [trail, setTrail] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showImageGallery, setShowImageGallery] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   // Ref for map scrolling
   const mapSectionRef = useRef(null);
@@ -24,20 +26,49 @@ const TrailDetails = () => {
     const fetchTrail = async () => {
       try {
         setIsLoading(true);
+        setError(null);
         const response = await axios.get(`/api/trails/${id}`);
         console.log('Trail API Response:', response.data);
         setTrail(response.data);
       } catch (err) {
         console.error('Error fetching trail:', err);
-        setError(err.message);
+        setError(err.message || 'Failed to load trail details');
       } finally {
         setIsLoading(false);
       }
     };
-    fetchTrail();
+    if (id) {
+      fetchTrail();
+    }
   }, [id]);
 
-  // --- 3. LOADING STATE ---
+  // Compute images array safely
+  const allImages = React.useMemo(() => {
+    if (!trail) return ["https://via.placeholder.com/800x400?text=Trail"];
+    return (trail.images && Array.isArray(trail.images) && trail.images.length > 0)
+      ? trail.images
+      : ["https://via.placeholder.com/800x400?text=Trail"];
+  }, [trail]);
+
+  // Keyboard navigation for image gallery
+  useEffect(() => {
+    if (showImageGallery && allImages.length > 0) {
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape') {
+          setShowImageGallery(false);
+        } else if (e.key === 'ArrowLeft') {
+          setSelectedImageIndex((prev) => (prev > 0 ? prev - 1 : allImages.length - 1));
+        } else if (e.key === 'ArrowRight') {
+          setSelectedImageIndex((prev) => (prev < allImages.length - 1 ? prev + 1 : 0));
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [showImageGallery, allImages.length]);
+
+
+  // --- 4. ERROR HANDLING ---
   if (isLoading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -49,7 +80,6 @@ const TrailDetails = () => {
     );
   }
 
-  // --- 4. ERROR HANDLING ---
   if (error || !trail) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center bg-background px-4">
@@ -78,23 +108,27 @@ const TrailDetails = () => {
   };
 
   // --- 6. DATA PREPARATION ---
-  // Simple image handling - use the image URL from API directly
-  const displayImages = trail.image ? [trail.image] : ["https://via.placeholder.com/800x400?text=Trail"];
+  // First 3 images for hero section
+  const heroImages = allImages.slice(0, 3);
+  // Remaining images for gallery (if more than 3)
+  const galleryImages = allImages.slice(3);
   
-  const tags = trail.tags || [];
+  const tags = trail?.tags || [];
   
   // Handle itinerary - can be array of objects or strings
-  const itinerary = (trail.itinerary || []).map(item => {
+  const itinerary = (trail?.itinerary || []).map(item => {
     if (typeof item === 'string') {
       return { description: item, points: [] };
     }
     return item;
   });
   
-  const reviews = trail.reviews || [];
+  const reviews = trail?.reviews || [];
 
   console.log('Trail data:', trail);
-  console.log('Display images:', displayImages);
+  console.log('All images:', allImages);
+  console.log('Hero images:', heroImages);
+  console.log('Gallery images:', galleryImages);
 
   return (
     <div className="min-h-screen bg-background pb-12 pt-4">
@@ -109,29 +143,84 @@ const TrailDetails = () => {
           <span>Back</span>
         </button>
 
-        {/* --- SECTION 1: COMPACT HERO --- */}
+        {/* --- SECTION 1: COMPACT HERO WITH 3 IMAGES --- */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6 border border-border">
-          {/* Reduced height to 35vh for compactness */}
-          <div className="relative h-[35vh] min-h-[250px] w-full">
-            <img
-              src={displayImages[0]}
-              alt={trail.name}
-              className="w-full h-full object-cover"
-            />
+          {/* Hero section with 3 images side by side */}
+          <div className="relative h-[35vh] min-h-[250px] w-full flex gap-1">
+            {heroImages.length > 0 ? (
+              <>
+                <div className="relative flex-1 overflow-hidden">
+                  <img
+                    src={heroImages[0]}
+                    alt={`${trail.name} - View 1`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.src = "https://via.placeholder.com/800x400?text=Trail";
+                    }}
+                  />
+                </div>
+                <div className="relative flex-1 overflow-hidden">
+                  <img
+                    src={heroImages.length > 1 ? heroImages[1] : heroImages[0]}
+                    alt={`${trail.name} - View 2`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.src = "https://via.placeholder.com/800x400?text=Trail";
+                    }}
+                  />
+                </div>
+                <div className="relative flex-1 overflow-hidden">
+                  <img
+                    src={heroImages.length > 2 ? heroImages[2] : heroImages[0]}
+                    alt={`${trail.name} - View 3`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.src = "https://via.placeholder.com/800x400?text=Trail";
+                    }}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="relative w-full h-full">
+                <img
+                  src="https://via.placeholder.com/800x400?text=Trail"
+                  alt={trail.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
             <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent" />
 
             <div className="absolute bottom-0 left-0 right-0 p-6">
-              <h1 className="text-white text-2xl md:text-3xl font-bold mb-2 drop-shadow-md">
-                {trail.name}
-              </h1>
-              <div className="flex flex-wrap items-center gap-3">
-                <span className={`px-3 py-1 rounded-full border text-xs font-semibold uppercase tracking-wide ${getDifficultyColor(trail.difficulty)}`}>
-                  {trail.difficulty}
-                </span>
-                <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full">
-                  <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
-                  <span className="text-foreground text-xs font-bold">{trail.rating}</span>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h1 className="text-white text-2xl md:text-3xl font-bold mb-2 drop-shadow-md">
+                    {trail.name}
+                  </h1>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className={`px-3 py-1 rounded-full border text-xs font-semibold uppercase tracking-wide ${getDifficultyColor(trail.difficulty)}`}>
+                      {trail.difficulty}
+                    </span>
+                    <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full">
+                      <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+                      <span className="text-foreground text-xs font-bold">{trail.rating}</span>
+                    </div>
+                  </div>
                 </div>
+                {allImages.length > 3 && (
+                  <button
+                    onClick={() => {
+                      setShowImageGallery(true);
+                      setSelectedImageIndex(0);
+                    }}
+                    className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-lg text-sm font-medium text-gray-900 hover:bg-white transition-all shadow-lg flex items-center gap-2"
+                  >
+                    <span>See All</span>
+                    <span className="bg-primary text-white px-2 py-0.5 rounded-full text-xs font-bold">
+                      {allImages.length}
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -267,17 +356,44 @@ const TrailDetails = () => {
             {trail.description || "No description available."}
           </p>
 
-          {displayImages.length > 1 && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {displayImages.slice(1, 5).map((img, index) => (
-                <div key={index} className="rounded-lg overflow-hidden h-32 shadow-sm">
-                  <img
-                    src={img}
-                    alt={`View ${index}`}
-                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                  />
-                </div>
-              ))}
+          {galleryImages.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-foreground text-base font-semibold">More Photos</h3>
+                {allImages.length > 2 && (
+                  <button
+                    onClick={() => {
+                      setShowImageGallery(true);
+                      setSelectedImageIndex(2);
+                    }}
+                    className="text-primary text-sm font-medium hover:underline flex items-center gap-1"
+                  >
+                    See All ({allImages.length})
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {galleryImages.slice(0, 4).map((img, index) => (
+                  <div 
+                    key={index} 
+                    className="rounded-lg overflow-hidden h-32 shadow-sm cursor-pointer hover:scale-105 transition-transform duration-300"
+                    onClick={() => {
+                      setShowImageGallery(true);
+                      setSelectedImageIndex(index + 2);
+                    }}
+                  >
+                    <img
+                      src={img}
+                      alt={`View ${index + 3}`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src = "https://via.placeholder.com/400x300?text=Trail";
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -397,6 +513,82 @@ const TrailDetails = () => {
         </div> */}
 
       </div>
+
+      {/* Image Gallery Modal */}
+      {showImageGallery && allImages.length > 0 && (
+        <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4">
+          <div className="relative w-full max-w-6xl h-full max-h-[90vh] flex flex-col">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowImageGallery(false)}
+              className="absolute top-4 right-4 z-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm p-2 rounded-full text-white transition-all"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* Main Image */}
+            <div className="flex-1 flex items-center justify-center mb-4">
+              <img
+                src={allImages[selectedImageIndex]}
+                alt={`${trail.name} - Image ${selectedImageIndex + 1}`}
+                className="max-w-full max-h-full object-contain rounded-lg"
+                onError={(e) => {
+                  e.target.src = "https://via.placeholder.com/1200x800?text=Trail";
+                }}
+              />
+            </div>
+
+            {/* Navigation Arrows */}
+            {allImages.length > 1 && (
+              <>
+                <button
+                  onClick={() => setSelectedImageIndex((prev) => (prev > 0 ? prev - 1 : allImages.length - 1))}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 backdrop-blur-sm p-3 rounded-full text-white transition-all"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+                <button
+                  onClick={() => setSelectedImageIndex((prev) => (prev < allImages.length - 1 ? prev + 1 : 0))}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 backdrop-blur-sm p-3 rounded-full text-white transition-all"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
+              </>
+            )}
+
+            {/* Thumbnail Strip */}
+            {allImages.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto pb-4 px-4 hide-scrollbar">
+                {allImages.map((img, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setSelectedImageIndex(index)}
+                    className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
+                      index === selectedImageIndex
+                        ? 'border-white scale-110'
+                        : 'border-white/30 hover:border-white/60'
+                    }`}
+                  >
+                    <img
+                      src={img}
+                      alt={`Thumbnail ${index + 1}`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src = "https://via.placeholder.com/100x100?text=Trail";
+                      }}
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Image Counter */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm px-4 py-2 rounded-full text-white text-sm">
+              {selectedImageIndex + 1} / {allImages.length}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
