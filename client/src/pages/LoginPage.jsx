@@ -47,24 +47,24 @@ const LoginPage = () => {
 				<div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white rounded-full blur-3xl" />
 			</div>
 
-			<div className="relative w-full max-w-md">
+			<div className="relative w-full max-w-md max-h-[95vh] overflow-y-auto">
 				{/* Logo and Title */}
-				<div className="text-center mb-8">
-					<div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-full mb-4 shadow-2xl">
-						<Mountain className="w-10 h-10 text-primary" />
+				<div className="text-center mb-4 sm:mb-5">
+					<div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-full mb-2 sm:mb-3 shadow-2xl">
+						<Mountain className="w-8 h-8 sm:w-10 sm:h-10 text-primary" />
 					</div>
-					<h1 className="text-white text-3xl font-bold mb-2 drop-shadow-lg">TrekMate</h1>
-					<p className="text-white/90 drop-shadow font-medium">Find your perfect hiking companion</p>
+					<h1 className="text-white text-2xl sm:text-3xl font-bold mb-1 drop-shadow-lg">TrekMate</h1>
+					<p className="text-white/90 drop-shadow font-medium text-sm">Find your perfect hiking companion</p>
 				</div>
 
 				{/* Login Card */}
-				<div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20">
-					<div className="text-center mb-8">
-						<h2 className="text-2xl font-bold text-foreground mb-2">Welcome Back</h2>
-						<p className="text-muted-foreground">Login to continue your adventure</p>
+				<div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 border border-white/20">
+					<div className="text-center mb-3 sm:mb-4">
+						<h2 className="text-lg sm:text-xl font-bold text-foreground mb-0.5 sm:mb-1">Welcome Back</h2>
+						<p className="text-muted-foreground text-xs sm:text-sm">Login to continue your adventure</p>
 					</div>
 
-					<form onSubmit={handleSubmit} className="space-y-5">
+					<form onSubmit={handleSubmit} className="space-y-3 sm:space-y-3.5">
 						<Input
 							type="email"
 							id="login-email"
@@ -103,22 +103,22 @@ const LoginPage = () => {
 						</div>
 
 						{error && (
-							<div className="p-3 rounded-lg bg-red-50 text-red-500 text-sm font-medium border border-red-100">
+							<div className="p-2 sm:p-2.5 rounded-lg bg-red-50 text-red-500 text-xs font-medium border border-red-100">
 								{error}
 							</div>
 						)}
 
-						<div className="flex items-center justify-between text-sm">
-							<label className="flex items-center gap-2 cursor-pointer">
+						<div className="flex items-center justify-between text-xs gap-2">
+							<label className="flex items-center gap-1.5 cursor-pointer">
 								<input
 									type="checkbox"
-									className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+									className="w-3.5 h-3.5 rounded border-border text-primary focus:ring-primary"
 								/>
-								<span className="text-muted-foreground">Remember me</span>
+								<span className="text-muted-foreground whitespace-nowrap">Remember me</span>
 							</label>
 							<Link
 								to="/forgot-password"
-								className="text-primary hover:text-primary/80 transition-colors font-medium"
+								className="text-primary hover:text-primary/80 transition-colors font-medium whitespace-nowrap"
 							>
 								Forgot password?
 							</Link>
@@ -127,7 +127,7 @@ const LoginPage = () => {
 						<button
 							type="submit"
 							disabled={isLoading}
-							className="w-full bg-primary text-white py-3 px-4 rounded-xl hover:bg-primary/90 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
+							className="w-full bg-primary text-white py-2 sm:py-2.5 px-4 rounded-xl hover:bg-primary/90 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium text-sm"
 						>
 							{isLoading ? (
 								<>
@@ -139,8 +139,8 @@ const LoginPage = () => {
 							)}
 						</button>
 
-						<div className="text-center pt-4 border-t border-border mt-6">
-							<p className="text-muted-foreground text-sm">
+						<div className="text-center pt-2.5 sm:pt-3 border-t border-border mt-3 sm:mt-4">
+							<p className="text-muted-foreground text-xs sm:text-sm">
 								Don&apos;t have an account?{' '}
 								<Link
 									to="/signup"
