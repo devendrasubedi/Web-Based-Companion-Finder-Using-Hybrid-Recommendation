@@ -37,55 +37,70 @@ const HomePage = ({ userName = "Traveler" }) => {
       try {
         setIsLoading(true);
         setError(null);
-        
-        // 1. Decoupled fetching - Start both requests but don't hold one for the other
-        // Fetch trails first as they are the main content
-        const trailsPromise = axios.get('/api/trails')
-            .then(async (trailsResp) => {
-                const initialTrails = trailsResp.data || [];
-                setTrails(initialTrails);
-                
-                // Once we have trails, stop loading spinner so user sees structure
-                setIsLoading(false); 
 
-                // 2. Fetch Images in Background (Lazy Load) AFTER trails render
-                if (initialTrails.length > 0) {
-                    const trailIds = initialTrails.map(t => t.id);
-                    try {
-                        const imgResp = await axios.post('/api/trails/batch-images', { ids: trailIds });
-                        const imagesMap = imgResp.data;
-                        
-                        setTrails(prevTrails => prevTrails.map(t => {
-                           const newImage = imagesMap[String(t.id)];
-                           return newImage ? { ...t, image: newImage } : t;
-                        }));
-                    } catch (imgErr) {
-                        console.error("Background image fetch failed:", imgErr);
+        // Standard Pattern: Fetch dependent data in parallel
+        // We use Promise.allSettled to ensure one failure doesn't block the other content
+        const [trailsResult, usersResult] = await Promise.allSettled([
+            axios.get('/api/trails'),
+            axios.get('/api/users')
+        ]);
+
+        // Process Trails
+        if (trailsResult.status === 'fulfilled') {
+            const initialTrails = (trailsResult.value.data || []).map(t => {
+                // INSTANT LOAD from LocalStorage
+                try {
+                    const cachedImages = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
+                    if (cachedImages[t.id]) {
+                        return { ...t, image: cachedImages[t.id] };
                     }
-                }
-            })
-            .catch(err => {
-                console.error('Error fetching trails:', err);
-                setError(err.message);
-                setIsLoading(false);
+                } catch(e) {/* ignore */}
+                return t;
             });
+            setTrails(initialTrails);
 
-        // Fetch users independently
-        axios.get('/api/users')
-            .then(usersResp => {
-                setUsers((usersResp.data || []).map(u => ({ 
-                  id: u._id || u.id, 
-                  name: u.name || 'Trekker',
-                  province: u.province || 'Nepal',
-                  district: u.district || 'Unknown'
-                })));
-            })
-            .catch(err => console.error("Error fetching users:", err));
+            // Lazy Load Images in Background
+            if (initialTrails.length > 0) {
+                const trailIds = initialTrails.map(t => t.id);
+                // Non-blocking call
+                axios.post('/api/trails/batch-images', { ids: trailIds })
+                    .then(imgResp => {
+                        const imagesMap = imgResp.data;
+                        try {
+                            const currentCache = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
+                            localStorage.setItem('trail_images_cache', JSON.stringify({ ...currentCache, ...imagesMap }));
+                        } catch(e) {/* ignore */}
 
-        await trailsPromise; // Wait for trails at least before saying "done" with the main effect hook
+                        setTrails(prevTrails => prevTrails.map(t => {
+                            const newImage = imagesMap[String(t.id)];
+                            return newImage ? { ...t, image: newImage } : t;
+                        }));
+                    })
+                    .catch(e => console.error("Background image fetch failed", e));
+            }
+        } else {
+            console.error('Trails fetch failed:', trailsResult.reason);
+            setError("Failed to load trails. Please try again.");
+        }
+
+        // Process Users
+        if (usersResult.status === 'fulfilled') {
+            setUsers((usersResult.value.data || []).map(u => ({ 
+                id: u._id || u.id, 
+                name: u.name || 'Trekker',
+                province: u.province || 'Nepal',
+                district: u.district || 'Unknown'
+            })));
+        } else {
+            console.error('Users fetch failed:', usersResult.reason);
+            // We don't block the page if users fail, just log it
+        }
 
       } catch (err) {
-        console.error('Error in fetchData setup:', err);
+        console.error('Unexpected error in fetchData:', err);
+        setError(err.message);
+      } finally {
+        // ALWAYS turn off loading, even if errors occurred
         setIsLoading(false);
       }
     };

@@ -4,7 +4,10 @@ import fs from 'fs';
 import mongoose from 'mongoose';
 import { getCloudinaryCardImage, getCloudinaryDetailImage, getCloudinaryUrl } from '../utils/cloudinaryHelper.js';
 
-// Store image paths for retrieval
+// --- SERVER-SIDE CACHING ---
+// Store image URLs in memory to avoid repeated DB lookups
+const globalImageUrlCache = new Map(); 
+// Store local file paths (legacy)
 const imageCache = new Map();
 
 // FOR THE CARDS (List View)
@@ -13,6 +16,8 @@ export const getAllTrails = async (req, res) => {
     try {
         // First, get all trails
         const trails = await Trail.aggregate([
+            // Optimization: Limit number of trails fetched for homepage performance
+            { $limit: 20 },
             // Keep only necessary fields
             { $project: { name: 1, difficulty: 1, description: 1, location: 1, duration: 1, tags: 1, rating: 1 } },
             {
@@ -186,33 +191,65 @@ export const getTrailImagesBatch = async (req, res) => {
         }
         
         const trailIds = ids.map(String);
-        let imagesMap = {};
+        let responseMap = {};
+        
+        // 1. Check Cache First
+        const missingIds = [];
+        trailIds.forEach(id => {
+            if (globalImageUrlCache.has(id)) {
+                responseMap[id] = globalImageUrlCache.get(id);
+            } else {
+                missingIds.push(id);
+            }
+        });
 
-        if (trailIds.length > 0) {
+        if (missingIds.length > 0) {
             try {
                 const authDbConnection = mongoose.connection.useDb('auth_db');
                 const imagesCollection = authDbConnection.collection('Cloudinary images');
 
+                // Prepare IDs for query (both string and ObjectId to be safe)
+                const queryIds = [...missingIds];
+                missingIds.forEach(id => {
+                    if (mongoose.Types.ObjectId.isValid(id)) {
+                        queryIds.push(new mongoose.Types.ObjectId(id));
+                    }
+                });
+
                 // Fetch all image documents for these trails
                 const imageDocs = await imagesCollection.find({
-                    trail_id: { $in: trailIds }
+                    trail_id: { $in: queryIds }
                 }).toArray();
 
                 imageDocs.forEach(doc => {
                     const trailId = String(doc.trail_id);
-                    let imagesArray = null;
+                    let validImage = null;
 
-                    if (doc.Images && Array.isArray(doc.Images)) imagesArray = doc.Images;
-                    else if (doc.images && Array.isArray(doc.images)) imagesArray = doc.images;
-                    else if (doc.image_urls && Array.isArray(doc.image_urls)) imagesArray = doc.image_urls;
-                    else if (doc.urls && Array.isArray(doc.urls)) imagesArray = doc.urls;
-                    else {
-                        const arrayKeys = Object.keys(doc).filter(key => Array.isArray(doc[key]));
-                        if (arrayKeys.length > 0) imagesArray = doc[arrayKeys[0]];
+                    // Helper to extract first image
+                    const candidateArrays = [
+                        doc.Images, doc.images, doc.image_urls, doc.urls
+                    ];
+                    
+                    // Try named fields
+                    for (const arr of candidateArrays) {
+                        if (Array.isArray(arr) && arr.length > 0) {
+                            validImage = arr[0];
+                            break;
+                        }
                     }
 
-                    if (imagesArray && imagesArray.length > 0) {
-                        imagesMap[trailId] = imagesArray[0];
+                    // Fallback: search all keys
+                    if (!validImage) {
+                         const arrayKeys = Object.keys(doc).filter(key => Array.isArray(doc[key]));
+                         if (arrayKeys.length > 0 && doc[arrayKeys[0]].length > 0) {
+                            validImage = doc[arrayKeys[0]][0];
+                         }
+                    }
+
+                    if (validImage) {
+                        // Update Response AND Cache
+                        responseMap[trailId] = validImage;
+                        globalImageUrlCache.set(trailId, validImage);
                     }
                 });
             } catch (imgErr) {
@@ -220,7 +257,8 @@ export const getTrailImagesBatch = async (req, res) => {
             }
         }
         
-        res.status(200).json(imagesMap);
+        res.status(200).json(responseMap);
+
     } catch (error) {
         console.error('Error in getTrailImagesBatch:', error);
         res.status(500).json({ message: error.message });
