@@ -21,6 +21,7 @@ import Footer from "./components/Footer";
 import { Toaster } from "react-hot-toast";
 import { useAuthStore } from "./store/authStore";
 import { useEffect } from "react";
+import { SocketProvider } from "./context/SocketContext";
 
 // protect routes that require authentication
 const ProtectedRoute = ({ children }) => {
@@ -83,7 +84,7 @@ function App() {
 	if (isCheckingAuth) return <LoadingSpinner />;
 
 	return (
-		<>
+		<SocketProvider>
 			<Routes>
 				{/* Protected Routes with MainLayout */}
 				<Route
@@ -141,7 +142,7 @@ function App() {
 				<Route path='*' element={<Navigate to='/' replace />} />
 			</Routes>
 			<Toaster />
-		</>
+		</SocketProvider>
 	);
 }
 

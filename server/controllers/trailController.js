@@ -6,7 +6,7 @@ import { getCloudinaryCardImage, getCloudinaryDetailImage, getCloudinaryUrl } fr
 
 // --- SERVER-SIDE CACHING ---
 // Store image URLs in memory to avoid repeated DB lookups
-const globalImageUrlCache = new Map(); 
+const globalImageUrlCache = new Map();
 // Store local file paths (legacy)
 const imageCache = new Map();
 
@@ -250,20 +250,6 @@ export const getAllTrails = async (req, res) => {
                 }
             ];
         }
-=======
-        // .select() ensures we only get the fields needed for the card
-        // This makes the API response much faster!
-        const trails = await Trail.find({}).select('name distance duration');
-
-        // Map the results to send basic trail data for cards
-        const cardData = trails.map(trail => ({
-            _id: trail._id,
-            name: trail.name,
-            distance: trail.distance?.min_km || 0,
-            duration: trail.duration?.min_days || 0,
-            thumbnail: 'default.jpg'
-        }));
->>>>>>> 3ca73ffd45ec49a507969d5723f64194769d2e5f
 
         res.status(200).json(cardData);
     } catch (error) {
@@ -279,10 +265,10 @@ export const getTrailImagesBatch = async (req, res) => {
         if (!ids || !Array.isArray(ids)) {
             return res.status(400).json({ message: 'ids array is required' });
         }
-        
+
         const trailIds = ids.map(String);
         let responseMap = {};
-        
+
         // 1. Check Cache First
         const missingIds = [];
         trailIds.forEach(id => {
@@ -319,7 +305,7 @@ export const getTrailImagesBatch = async (req, res) => {
                     const candidateArrays = [
                         doc.Images, doc.images, doc.image_urls, doc.urls
                     ];
-                    
+
                     // Try named fields
                     for (const arr of candidateArrays) {
                         if (Array.isArray(arr) && arr.length > 0) {
@@ -330,10 +316,10 @@ export const getTrailImagesBatch = async (req, res) => {
 
                     // Fallback: search all keys
                     if (!validImage) {
-                         const arrayKeys = Object.keys(doc).filter(key => Array.isArray(doc[key]));
-                         if (arrayKeys.length > 0 && doc[arrayKeys[0]].length > 0) {
+                        const arrayKeys = Object.keys(doc).filter(key => Array.isArray(doc[key]));
+                        if (arrayKeys.length > 0 && doc[arrayKeys[0]].length > 0) {
                             validImage = doc[arrayKeys[0]][0];
-                         }
+                        }
                     }
 
                     if (validImage) {
@@ -346,7 +332,7 @@ export const getTrailImagesBatch = async (req, res) => {
                 console.error('[getTrailImagesBatch] Error fetching images:', imgErr);
             }
         }
-        
+
         res.status(200).json(responseMap);
 
     } catch (error) {
@@ -364,8 +350,8 @@ export const getTrailById = async (req, res) => {
         const trail = await Trail.findById(id).lean();
 
         if (!trail) {
-             // Fallback logic kept for safety (truncated for brevity)
-             // ... existing sample logic if needed ...
+            // Fallback logic kept for safety (truncated for brevity)
+            // ... existing sample logic if needed ...
             return res.status(404).json({ message: "Trail not found", id });
         }
 
@@ -392,18 +378,18 @@ export const getTrailMedia = async (req, res) => {
             const authDbConnection = mongoose.connection.useDb('auth_db');
             const imagesCollection = authDbConnection.collection('Cloudinary images');
             const imageData = await imagesCollection.findOne({ trail_id: String(id) });
-            
+
             if (imageData) {
                 if (imageData.Images && Array.isArray(imageData.Images)) images = imageData.Images;
                 else if (imageData.images && Array.isArray(imageData.images)) images = imageData.images;
                 else if (imageData.image_urls && Array.isArray(imageData.image_urls)) images = imageData.image_urls;
                 else if (imageData.urls && Array.isArray(imageData.urls)) images = imageData.urls;
             }
-        } catch(e) { console.error("Error fetching media", e); }
+        } catch (e) { console.error("Error fetching media", e); }
 
         res.status(200).json({ images });
-    } catch(error) {
-        res.status(500).json({message: error.message});
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
 };
 
@@ -418,8 +404,8 @@ export const getTrailMapData = async (req, res) => {
             console.error(`Error fetching GeoJSON for trail ${id}:`, geoError);
         }
         res.status(200).json({ geoJson: geoJsonData });
-    } catch(error) {
-        res.status(500).json({message: error.message});
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
 };
 
