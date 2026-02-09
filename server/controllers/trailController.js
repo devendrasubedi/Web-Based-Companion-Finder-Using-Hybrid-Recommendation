@@ -237,8 +237,7 @@ export const getAllTrails = async (req, res) => {
                     tags: ["Lake", "Trek"]
                 },
                 {
-                    id: 'R0008',
-                    name: "Rara Lake",
+                     name: "Rara Lake",
                     location: "Mugu",
                     province: "Karnali",
                     difficulty: "moderate",
