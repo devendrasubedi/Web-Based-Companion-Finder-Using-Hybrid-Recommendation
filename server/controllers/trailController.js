@@ -2,7 +2,7 @@ import { Trail, TrailGeoJSON } from '../models/trailModel.js';
 import path from 'path';
 import fs from 'fs';
 import mongoose from 'mongoose';
-import { getCloudinaryCardImage, getCloudinaryDetailImage, getCloudinaryUrl } from '../utils/cloudinaryHelper.js';
+
 
 // --- SERVER-SIDE CACHING ---
 // Store image URLs in memory to avoid repeated DB lookups
@@ -163,7 +163,7 @@ export const getAllTrails = async (req, res) => {
                     tags: ["Lake", "Trek"]
                 },
                 {
-                     name: "Rara Lake",
+                    name: "Rara Lake",
                     location: "Mugu",
                     province: "Karnali",
                     difficulty: "moderate",
