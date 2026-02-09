@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, Plus, User, UserPlus } from 'lucide-react';
 import axios from 'axios';
 import ConversationList from './ConversationList';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
+import CreateGroupModal from './CreateGroupModal';
+import AddMemberModal from './AddMemberModal';
 import { useSocket } from '../../context/SocketContext';
 import useChatStore from '../../store/useChatStore';
 import { useAuthStore } from '../../store/authStore';
@@ -33,6 +35,8 @@ const ChatContainer = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [showSearch, setShowSearch] = useState(false);
+    const [showCreateGroup, setShowCreateGroup] = useState(false);
+    const [showAddMember, setShowAddMember] = useState(false);
 
     // Fetch conversations on mount
     useEffect(() => {
@@ -139,6 +143,54 @@ const ChatContainer = () => {
         }
     };
 
+    const handleCreateGroup = async (name, participantIds) => {
+        try {
+            const response = await axios.post('/api/chat/group', {
+                name,
+                participants: participantIds
+            });
+
+            if (response.data.success) {
+                const newConv = response.data.conversation;
+
+                // Add to conversations list
+                const updatedConversations = [newConv, ...conversations];
+                setConversations(updatedConversations);
+
+                // Select the new conversation
+                handleSelectConversation(newConv);
+
+                // Close modal
+                setShowCreateGroup(false);
+            }
+        } catch (error) {
+            console.error('Error creating group:', error);
+        }
+    };
+
+    const handleAddMember = async (participantIds) => {
+        if (!activeConversation) return;
+
+        try {
+            const response = await axios.put('/api/chat/group/add', {
+                conversationId: activeConversation._id,
+                participants: participantIds
+            });
+
+            if (response.data.success) {
+                const updatedConv = response.data.conversation;
+                updateConversation(updatedConv);
+                // Also update active conversation if it matches
+                if (activeConversation._id === updatedConv._id) {
+                    setActiveConversation(updatedConv);
+                }
+                setShowAddMember(false);
+            }
+        } catch (error) {
+            console.error('Error adding members:', error);
+        }
+    };
+
     const handleStartConversation = async (otherUserId) => {
         try {
             console.log('Starting conversation with user:', otherUserId);
@@ -189,12 +241,22 @@ const ChatContainer = () => {
                 <div className="p-4 border-b border-border">
                     <div className="flex items-center justify-between mb-3">
                         <h2 className="text-xl font-semibold">Messages</h2>
-                        <button
-                            onClick={() => setShowSearch(!showSearch)}
-                            className="p-2 hover:bg-muted rounded-lg transition-colors"
-                        >
-                            {showSearch ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
-                        </button>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setShowCreateGroup(true)}
+                                className="p-2 hover:bg-muted rounded-lg transition-colors"
+                                title="Create Group"
+                            >
+                                <Plus className="w-5 h-5" />
+                            </button>
+                            <button
+                                onClick={() => setShowSearch(!showSearch)}
+                                className="p-2 hover:bg-muted rounded-lg transition-colors"
+                                title="Search Users"
+                            >
+                                {showSearch ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
+                            </button>
+                        </div>
                     </div>
 
                     {/* Search */}
@@ -250,18 +312,40 @@ const ChatContainer = () => {
                     <>
                         {/* Chat header */}
                         <div className="p-4 border-b border-border">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                                    <span className="text-sm font-semibold text-primary">
-                                        {activeConversation.otherParticipant.name.charAt(0).toUpperCase()}
-                                    </span>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${activeConversation.isGroup ? 'bg-indigo-100 text-indigo-600' : 'bg-primary/20 text-primary'}`}>
+                                        <span className="text-sm font-semibold">
+                                            {activeConversation.isGroup
+                                                ? <User className="w-5 h-5" />
+                                                : activeConversation.otherParticipant.name.charAt(0).toUpperCase()
+                                            }
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold">
+                                            {activeConversation.isGroup
+                                                ? activeConversation.groupName
+                                                : activeConversation.otherParticipant.name
+                                            }
+                                        </h3>
+                                        <p className="text-xs text-muted-foreground">
+                                            {activeConversation.isGroup
+                                                ? `${activeConversation.participants.length} members`
+                                                : (isConnected ? 'Connected' : 'Connecting...')
+                                            }
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="font-semibold">{activeConversation.otherParticipant.name}</h3>
-                                    <p className="text-xs text-muted-foreground">
-                                        {isConnected ? 'Connected' : 'Connecting...'}
-                                    </p>
-                                </div>
+                                {activeConversation.isGroup && (
+                                    <button
+                                        onClick={() => setShowAddMember(true)}
+                                        className="p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground hover:text-foreground"
+                                        title="Add Members"
+                                    >
+                                        <UserPlus className="w-5 h-5" />
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -280,6 +364,22 @@ const ChatContainer = () => {
                     </div>
                 )}
             </div>
+
+            {showCreateGroup && (
+                <CreateGroupModal
+                    onClose={() => setShowCreateGroup(false)}
+                    onCreateGroup={handleCreateGroup}
+                />
+            )}
+
+            {showAddMember && activeConversation && (
+                <AddMemberModal
+                    onClose={() => setShowAddMember(false)}
+                    onAddMember={handleAddMember}
+                    conversationId={activeConversation._id}
+                    currentParticipants={activeConversation.participants || []}
+                />
+            )}
         </div>
     );
 };

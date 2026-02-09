@@ -14,23 +14,39 @@ export const getUserConversations = async (req, res) => {
             .populate('lastMessage')
             .sort({ updatedAt: -1 });
 
-        // Format conversations with other participant info
+        // Format conversations
         const formattedConversations = conversations.map(conv => {
-            const otherParticipant = conv.participants.find(
-                p => p._id.toString() !== userId.toString()
-            );
-
-            return {
+            let conversationData = {
                 _id: conv._id,
-                otherParticipant: {
-                    _id: otherParticipant._id,
-                    name: otherParticipant.name,
-                    email: otherParticipant.email
-                },
+                isGroup: conv.isGroup || false,
                 lastMessage: conv.lastMessage,
                 unreadCount: conv.unreadCount.get(userId.toString()) || 0,
                 updatedAt: conv.updatedAt
             };
+
+            if (conv.isGroup) {
+                conversationData.groupName = conv.groupName;
+                conversationData.groupAdmin = conv.groupAdmin;
+                conversationData.participants = conv.participants.map(p => ({
+                    _id: p._id,
+                    name: p.name,
+                    email: p.email
+                }));
+                // For group chats, otherParticipant is not applicable in the same way, 
+                // but we can set it to null or a placeholder if frontend expects it.
+                // However, updated frontend should check isGroup.
+            } else {
+                const otherParticipant = conv.participants.find(
+                    p => p._id.toString() !== userId.toString()
+                );
+                conversationData.otherParticipant = {
+                    _id: otherParticipant?._id,
+                    name: otherParticipant?.name || 'Unknown User',
+                    email: otherParticipant?.email || ''
+                };
+            }
+
+            return conversationData;
         });
 
         res.status(200).json({
@@ -227,6 +243,180 @@ export const markMessagesAsRead = async (req, res) => {
         });
     } catch (error) {
         console.log("Error in markMessagesAsRead:", error);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
+
+
+
+// Create a group chat
+export const createGroupChat = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { name, participants } = req.body;
+
+        if (!name || name.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Group name is required"
+            });
+        }
+
+        if (!participants || !Array.isArray(participants) || participants.length < 2) {
+            return res.status(400).json({
+                success: false,
+                message: "A group must have at least 3 participants (including you)"
+            });
+        }
+
+        // Add current user to participants if not already added
+        const uniqueParticipants = [...new Set([...participants, userId])];
+
+        if (uniqueParticipants.length < 3) {
+            return res.status(400).json({
+                success: false,
+                message: "A group must have at least 3 participants"
+            });
+        }
+
+        // Verify that all participants exist
+        const users = await User.find({ _id: { $in: uniqueParticipants } });
+        if (users.length !== uniqueParticipants.length) {
+            return res.status(400).json({
+                success: false,
+                message: "One or more participants not found"
+            });
+        }
+
+        const conversation = await Conversation.create({
+            participants: uniqueParticipants,
+            isGroup: true,
+            groupName: name,
+            groupAdmin: userId,
+            unreadCount: uniqueParticipants.reduce((acc, id) => {
+                acc[id] = 0;
+                return acc;
+            }, {})
+        });
+
+        const populatedConversation = await Conversation.findById(conversation._id)
+            .populate('participants', 'name email')
+            .populate('groupAdmin', 'name email');
+
+        res.status(201).json({
+            success: true,
+            conversation: {
+                _id: populatedConversation._id,
+                isGroup: true,
+                groupName: populatedConversation.groupName,
+                groupAdmin: populatedConversation.groupAdmin,
+                participants: populatedConversation.participants.map(p => ({
+                    _id: p._id,
+                    name: p.name,
+                    email: p.email
+                })),
+                lastMessage: null,
+                unreadCount: 0,
+                updatedAt: populatedConversation.updatedAt
+            }
+        });
+
+    } catch (error) {
+        console.log("Error in createGroupChat:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server Error: " + error.message
+        });
+    }
+};
+
+// Add participants to a group
+export const addGroupParticipants = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { conversationId, participants } = req.body;
+
+        if (!conversationId || !participants || !Array.isArray(participants) || participants.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Conversation ID and participants are required"
+            });
+        }
+
+        // Check if conversation exists and is a group
+        const conversation = await Conversation.findOne({
+            _id: conversationId,
+            isGroup: true,
+            participants: userId // Only allow existing participants to add others
+        });
+
+        if (!conversation) {
+            return res.status(404).json({
+                success: false,
+                message: "Group not found or you are not a participant"
+            });
+        }
+
+        // Verify users to add exist
+        const usersToAdd = await User.find({ _id: { $in: participants } });
+        if (usersToAdd.length !== participants.length) {
+            return res.status(400).json({
+                success: false,
+                message: "One or more users to add not found"
+            });
+        }
+
+        // Add users to participants list (using Set to avoid duplicates handled by addToSet in logic, but explicit check is good)
+        // Mongoose addToSet will only add unique values
+        const updatedConversation = await Conversation.findByIdAndUpdate(
+            conversationId,
+            {
+                $addToSet: { participants: { $each: participants } }
+            },
+            { new: true }
+        )
+            .populate('participants', 'name email')
+            .populate('groupAdmin', 'name email');
+
+        // Initialize unread counts for new members
+        // We need to do this manually because findByIdAndUpdate doesn't run pre-save hooks easily for this map logic in the same way 
+        // or effectively we just want to ensure they have an entry.
+
+        // However, updating the map via findByIdAndUpdate is tricky. Let's do it via save if needed or just specific update.
+        // Easiest is to fetch, update map, save. But since we used findByIdAndUpdate above, we can just update the map now.
+
+        let needsSave = false;
+        participants.forEach(pId => {
+            if (!updatedConversation.unreadCount.has(pId.toString())) {
+                updatedConversation.unreadCount.set(pId.toString(), 0);
+                needsSave = true;
+            }
+        });
+
+        if (needsSave) {
+            await updatedConversation.save();
+        }
+
+        res.status(200).json({
+            success: true,
+            conversation: {
+                _id: updatedConversation._id,
+                isGroup: true,
+                groupName: updatedConversation.groupName,
+                groupAdmin: updatedConversation.groupAdmin,
+                participants: updatedConversation.participants.map(p => ({
+                    _id: p._id,
+                    name: p.name,
+                    email: p.email
+                })),
+                lastMessage: updatedConversation.lastMessage,
+                unreadCount: updatedConversation.unreadCount.get(userId.toString()) || 0,
+                updatedAt: updatedConversation.updatedAt
+            }
+        });
+
+    } catch (error) {
+        console.log("Error in addGroupParticipants:", error);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };

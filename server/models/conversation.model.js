@@ -1,19 +1,21 @@
 import mongoose from "mongoose";
 
 const conversationSchema = new mongoose.Schema({
-    participants: {
-        type: [{
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
-        }],
-        validate: [
-            {
-                validator: function (val) {
-                    return val && val.length === 2;
-                },
-                message: 'A conversation must have exactly 2 participants'
-            }
-        ]
+    participants: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+    isGroup: {
+        type: Boolean,
+        default: false
+    },
+    groupName: {
+        type: String,
+        trim: true
+    },
+    groupAdmin: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
     },
     lastMessage: {
         type: mongoose.Schema.Types.ObjectId,
@@ -32,7 +34,9 @@ const conversationSchema = new mongoose.Schema({
 conversationSchema.index({ participants: 1 });
 
 // Method to get the other participant
+// Method to get the other participant (for 1-on-1 chats)
 conversationSchema.methods.getOtherParticipant = function (userId) {
+    if (this.isGroup) return null;
     return this.participants.find(id => id.toString() !== userId.toString());
 };
 

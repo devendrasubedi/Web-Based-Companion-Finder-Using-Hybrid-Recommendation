@@ -37,27 +37,42 @@ const ConversationList = ({ onSelectConversation }) => {
         <div className="flex flex-col h-full overflow-y-auto">
             {conversations.map((conversation) => {
                 const isActive = activeConversation?._id === conversation._id;
-                const otherUser = conversation.otherParticipant;
-                const isOnline = isUserOnline(otherUser._id);
+                const isGroup = conversation.isGroup;
+                const otherUser = isGroup ? null : conversation.otherParticipant;
+
+                // Determine name and online status
+                let displayName = '';
+                let isOnline = false;
+                let initial = '';
+
+                if (isGroup) {
+                    displayName = conversation.groupName;
+                    initial = displayName.charAt(0).toUpperCase();
+                    // Optional: Check if any participant is online? Or just don't show online status for groups
+                } else {
+                    displayName = otherUser?.name || 'Unknown User';
+                    initial = displayName.charAt(0).toUpperCase();
+                    isOnline = otherUser ? isUserOnline(otherUser._id) : false;
+                }
 
                 return (
                     <div
                         key={conversation._id}
                         onClick={() => onSelectConversation(conversation)}
                         className={`flex items-center gap-3 p-4 cursor-pointer border-b border-border transition-colors ${isActive
-                                ? 'bg-primary/10 border-l-4 border-l-primary'
-                                : 'hover:bg-muted/50'
+                            ? 'bg-primary/10 border-l-4 border-l-primary'
+                            : 'hover:bg-muted/50'
                             }`}
                     >
                         {/* Avatar */}
                         <div className="relative flex-shrink-0">
-                            <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-                                <span className="text-lg font-semibold text-primary">
-                                    {otherUser.name.charAt(0).toUpperCase()}
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isGroup ? 'bg-indigo-100 text-indigo-600' : 'bg-primary/20 text-primary'}`}>
+                                <span className="text-lg font-semibold">
+                                    {isGroup ? <User className="w-6 h-6" /> : initial}
                                 </span>
                             </div>
-                            {/* Online indicator */}
-                            {isOnline && (
+                            {/* Online indicator - only for 1-on-1 */}
+                            {!isGroup && isOnline && (
                                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-background"></div>
                             )}
                         </div>
@@ -66,7 +81,7 @@ const ConversationList = ({ onSelectConversation }) => {
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1">
                                 <h3 className="font-semibold text-foreground truncate">
-                                    {otherUser.name}
+                                    {displayName}
                                 </h3>
                                 {conversation.lastMessage && (
                                     <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
