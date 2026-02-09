@@ -17,7 +17,7 @@ const MessageInput = () => {
         if (!isTypingRef.current) {
             socket.emit('typing_start', {
                 conversationId: activeConversation._id,
-                receiverId: activeConversation.otherParticipant._id
+                receiverId: activeConversation.isGroup ? null : activeConversation.otherParticipant?._id
             });
             isTypingRef.current = true;
         }
@@ -32,7 +32,7 @@ const MessageInput = () => {
             if (socket && activeConversation) {
                 socket.emit('typing_stop', {
                     conversationId: activeConversation._id,
-                    receiverId: activeConversation.otherParticipant._id
+                    receiverId: activeConversation.isGroup ? null : activeConversation.otherParticipant?._id
                 });
                 isTypingRef.current = false;
             }
@@ -50,7 +50,7 @@ const MessageInput = () => {
         if (isTypingRef.current) {
             socket.emit('typing_stop', {
                 conversationId: activeConversation._id,
-                receiverId: activeConversation.otherParticipant._id
+                receiverId: activeConversation.isGroup ? null : activeConversation.otherParticipant?._id
             });
             isTypingRef.current = false;
         }
@@ -61,11 +61,16 @@ const MessageInput = () => {
         }
 
         // Send message
-        socket.emit('send_message', {
+        const messageData = {
             conversationId: activeConversation._id,
-            receiverId: activeConversation.otherParticipant._id,
             content: message.trim()
-        });
+        };
+
+        if (!activeConversation.isGroup) {
+            messageData.receiverId = activeConversation.otherParticipant?._id;
+        }
+
+        socket.emit('send_message', messageData);
 
         setMessage('');
     };

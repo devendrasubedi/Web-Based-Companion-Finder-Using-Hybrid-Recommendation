@@ -16,8 +16,10 @@ export const getAllTrails = async (req, res) => {
     try {
         // First, get all trails
         const trails = await Trail.aggregate([
-            // Keep only necessary fields (include cost and full location for filters)
-            { $project: { name: 1, difficulty: 1, description: 1, location: 1, duration: 1, tags: 1, rating: 1, cost: 1 } },
+            // Optimization: Limit number of trails fetched for homepage performance
+            { $limit: 20 },
+            // Keep only necessary fields
+            { $project: { name: 1, difficulty: 1, description: 1, location: 1, duration: 1, tags: 1, rating: 1 } },
             {
                 $addFields: {
                     durationDays: { $ifNull: ["$duration.min_days", null] }
@@ -32,92 +34,20 @@ export const getAllTrails = async (req, res) => {
                     description: 1,
                     location: 1,
                     duration: { $cond: [{ $ifNull: ["$durationDays", false] }, { $concat: [{ $toString: "$durationDays" }, " days"] }, null] },
-                    tags: 1,
-                    rating: 1,
-                    cost: 1
+                    tags: 1
                 }
             }
         ]);
 
-        // Fetch images from auth_db separately (since $lookup only works within same database)
-        const trailIds = trails.map(t => String(t._id));
-        let imagesMap = new Map();
+        // Fetch images later via batch endpoint to improve performance
+        // const trailIds = trails.map(t => String(t._id));
+        // let imagesMap = new Map();
 
-        console.log(`[getAllTrails] Fetching images for ${trailIds.length} trails. Trail IDs:`, trailIds.slice(0, 5));
-
-        if (trailIds.length > 0) {
-            try {
-                const authDbConnection = mongoose.connection.useDb('auth_db');
-                const imagesCollection = authDbConnection.collection('Cloudinary images');
-
-                // First, check if collection exists and has documents
-                const totalDocs = await imagesCollection.countDocuments();
-                console.log(`[getAllTrails] Total documents in 'Cloudinary images' collection: ${totalDocs}`);
-
-                // Fetch all image documents for these trails
-                const imageDocs = await imagesCollection.find({
-                    trail_id: { $in: trailIds }
-                }).toArray();
-
-                console.log(`[getAllTrails] Found ${imageDocs.length} matching image documents`);
-
-                // Log sample documents to see structure
-                if (imageDocs.length > 0) {
-                    console.log(`[getAllTrails] Sample image document:`, JSON.stringify(imageDocs[0], null, 2));
-                }
-
-                // Create a map of trail_id -> first image URL
-                imageDocs.forEach(doc => {
-                    const trailId = String(doc.trail_id);
-                    console.log(`[getAllTrails] Processing doc for trail_id: ${trailId}`);
-                    console.log(`[getAllTrails] Document structure:`, JSON.stringify(doc, null, 2));
-                    console.log(`[getAllTrails] Has Images field: ${!!doc.Images}, Is array: ${Array.isArray(doc.Images)}, Length: ${doc.Images?.length || 0}`);
-                    console.log(`[getAllTrails] Has images field: ${!!doc.images}, Is array: ${Array.isArray(doc.images)}, Length: ${doc.images?.length || 0}`);
-
-                    // Check for different possible field names (case-insensitive check)
-                    let imagesArray = null;
-                    if (doc.Images && Array.isArray(doc.Images)) {
-                        imagesArray = doc.Images;
-                        console.log(`[getAllTrails] Using 'Images' field`);
-                    } else if (doc.images && Array.isArray(doc.images)) {
-                        imagesArray = doc.images;
-                        console.log(`[getAllTrails] Using 'images' field`);
-                    } else if (doc.image_urls && Array.isArray(doc.image_urls)) {
-                        imagesArray = doc.image_urls;
-                        console.log(`[getAllTrails] Using 'image_urls' field`);
-                    } else if (doc.urls && Array.isArray(doc.urls)) {
-                        imagesArray = doc.urls;
-                        console.log(`[getAllTrails] Using 'urls' field`);
-                    } else {
-                        // Check all keys to find array fields
-                        const arrayKeys = Object.keys(doc).filter(key => Array.isArray(doc[key]));
-                        console.log(`[getAllTrails] Array fields found:`, arrayKeys);
-                        if (arrayKeys.length > 0) {
-                            imagesArray = doc[arrayKeys[0]];
-                            console.log(`[getAllTrails] Using first array field: ${arrayKeys[0]}`);
-                        }
-                    }
-
-                    if (imagesArray && imagesArray.length > 0) {
-                        const firstImage = imagesArray[0];
-                        imagesMap.set(trailId, firstImage);
-                        console.log(`[getAllTrails] ✅ Mapped trail ${trailId} -> image: ${firstImage}`);
-                    } else {
-                        console.log(`[getAllTrails] ❌ No valid images array found for trail ${trailId}. Document keys:`, Object.keys(doc));
-                    }
-                });
-
-                console.log(`[getAllTrails] Images map size: ${imagesMap.size}, Mapped trails:`, Array.from(imagesMap.keys()));
-            } catch (imgErr) {
-                console.error('[getAllTrails] Error fetching images from auth_db:', imgErr.message);
-                console.error('[getAllTrails] Full error:', imgErr);
-            }
-        }
 
         // Map to simpler keys the client expects and add images
         let cardData = trails.map(t => {
             const trailId = String(t._id);
-            const imageUrl = imagesMap.get(trailId);
+            // const imageUrl = imagesMap.get(trailId);
 
             const card = {
                 id: t._id,
@@ -125,20 +55,16 @@ export const getAllTrails = async (req, res) => {
                 difficulty: t.difficulty,
                 description: t.description,
                 location: (t.location && (t.location.start || (t.location.provinces && t.location.provinces[0]) || '')) || '',
-                province: (t.location && t.location.provinces && t.location.provinces[0]) || '',
                 duration: t.duration || 'N/A',
-                image: imageUrl || "https://via.placeholder.com/600x400?text=Trail",
+                image: "https://via.placeholder.com/600x400?text=Loading...", // Placeholder
                 tags: t.tags || [],
-                rating: t.rating || 4.5,
-                cost: t.cost,
-                cost_min: t.cost?.min_npr,
-                cost_max: t.cost?.max_npr
+                rating: t.rating || 4.5
             };
 
             // Log if image is missing
-            if (!imageUrl) {
-                console.log(`[getAllTrails] Trail ${trailId} (${t.name}) has no image, using placeholder`);
-            }
+            // if (!imageUrl) {
+            //    console.log(`[getAllTrails] Trail ${trailId} (${t.name}) has no image, using placeholder`);
+            // }
 
             return card;
         });

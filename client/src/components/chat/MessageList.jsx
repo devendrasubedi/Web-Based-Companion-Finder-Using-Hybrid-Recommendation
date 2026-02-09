@@ -51,11 +51,11 @@ const MessageList = () => {
                     >
                         <div
                             className={`max-w-[70%] rounded-lg px-4 py-2 ${isSentByMe
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'bg-muted text-foreground'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted text-foreground'
                                 }`}
                         >
-                            {!isSentByMe && (
+                            {!isSentByMe && activeConversation?.isGroup && (
                                 <p className="text-xs font-semibold mb-1">
                                     {message.sender.name}
                                 </p>
@@ -63,8 +63,8 @@ const MessageList = () => {
                             <p className="break-words">{message.content}</p>
                             <p
                                 className={`text-xs mt-1 ${isSentByMe
-                                        ? 'text-primary-foreground/70'
-                                        : 'text-muted-foreground'
+                                    ? 'text-primary-foreground/70'
+                                    : 'text-muted-foreground'
                                     }`}
                             >
                                 {formatTime(message.createdAt)}

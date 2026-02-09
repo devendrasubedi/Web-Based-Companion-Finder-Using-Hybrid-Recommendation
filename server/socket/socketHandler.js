@@ -58,57 +58,80 @@ export const initializeSocket = (io) => {
             try {
                 const { conversationId, receiverId, content } = data;
 
-                // Validate input
-                if (!conversationId || !receiverId || !content) {
+                // Validate input: Content and ConversationId are always required
+                if (!conversationId || !content) {
                     socket.emit("error", { message: "Missing required fields" });
                     return;
                 }
 
                 // Verify conversation exists and user is a participant
+                // We use findById ensure we get the doc, then check participants in JS if needed or query
                 const conversation = await Conversation.findOne({
                     _id: conversationId,
-                    participants: { $all: [userId, receiverId] }
+                    participants: userId // Must be a participant
                 });
 
                 if (!conversation) {
-                    socket.emit("error", { message: "Conversation not found" });
+                    socket.emit("error", { message: "Conversation not found or you are not a participant" });
+                    return;
+                }
+
+                // If not a group, ensure receiverId is provided and valid (though client should handle this)
+                if (!conversation.isGroup && !receiverId) {
+                    socket.emit("error", { message: "Receiver ID required for 1-on-1 chats" });
                     return;
                 }
 
                 // Create new message
-                const message = await Message.create({
+                const messageData = {
                     conversationId,
                     sender: userId,
-                    receiver: receiverId,
                     content: content.trim()
-                });
+                };
 
-                // Populate sender and receiver info
+                if (receiverId) {
+                    messageData.receiver = receiverId;
+                } else if (conversation.isGroup) {
+                    // For groups, no single receiver. We could leave it undefined.
+                }
+
+                const message = await Message.create(messageData);
+
+                // Populate sender info (receiver might be null)
                 await message.populate('sender', 'name email');
-                await message.populate('receiver', 'name email');
+                if (message.receiver) {
+                    await message.populate('receiver', 'name email');
+                }
 
                 // Update conversation's last message
                 conversation.lastMessage = message._id;
 
-                // Increment unread count for receiver
-                const receiverUnreadCount = conversation.unreadCount.get(receiverId.toString()) || 0;
-                conversation.unreadCount.set(receiverId.toString(), receiverUnreadCount + 1);
+                // Increment unread count for other participants
+                conversation.participants.forEach(pId => {
+                    if (pId.toString() !== userId.toString()) {
+                        const count = conversation.unreadCount.get(pId.toString()) || 0;
+                        conversation.unreadCount.set(pId.toString(), count + 1);
+                    }
+                });
 
                 await conversation.save();
 
-                // Send message to both sender and receiver
-                io.to(userId.toString()).emit("new_message", message);
-                io.to(receiverId.toString()).emit("new_message", message);
+                // Send message to all participants (including sender for confirmation/update)
+                // Sending to the user's room is sufficient as they join it on connection
+                conversation.participants.forEach(pId => {
+                    io.to(pId.toString()).emit("new_message", message);
+                });
 
-                // Update conversation for both users
+                // Update conversation for all participants
                 const formattedConversation = {
                     _id: conversation._id,
                     lastMessage: message,
                     updatedAt: conversation.updatedAt
                 };
 
-                io.to(userId.toString()).emit("conversation_updated", formattedConversation);
-                io.to(receiverId.toString()).emit("conversation_updated", formattedConversation);
+                conversation.participants.forEach(pId => {
+                    io.to(pId.toString()).emit("conversation_updated", formattedConversation);
+                });
 
             } catch (error) {
                 console.log("Error in send_message:", error);

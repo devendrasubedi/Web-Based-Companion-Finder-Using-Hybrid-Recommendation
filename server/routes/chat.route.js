@@ -5,7 +5,9 @@ import {
     getConversationMessages,
     createOrGetConversation,
     markMessagesAsRead,
-    searchUsers
+    searchUsers,
+    createGroupChat,
+    addGroupParticipants
 } from "../controllers/chat.controller.js";
 
 const router = express.Router();
@@ -21,6 +23,12 @@ router.get("/messages/:conversationId", getConversationMessages);
 
 // Create or get conversation with another user
 router.post("/conversations", createOrGetConversation);
+
+// Create a group chat
+router.post("/group", createGroupChat);
+
+// Add participants to a group
+router.put("/group/add", addGroupParticipants);
 
 // Mark messages as read in a conversation
 router.put("/conversations/:conversationId/read", markMessagesAsRead);
