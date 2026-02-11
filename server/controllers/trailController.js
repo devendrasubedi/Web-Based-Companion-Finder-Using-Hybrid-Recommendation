@@ -16,8 +16,8 @@ export const getAllTrails = async (req, res) => {
     try {
         // First, get all trails
         const trails = await Trail.aggregate([
-            // Optimization: Limit number of trails fetched for homepage performance
-            { $limit: 20 },
+            // Optimization: Limit removed to allow Explore page to see all trails
+            // { $limit: 20 },
             // Keep only necessary fields
             { $project: { name: 1, difficulty: 1, description: 1, location: 1, duration: 1, tags: 1, rating: 1 } },
             {
