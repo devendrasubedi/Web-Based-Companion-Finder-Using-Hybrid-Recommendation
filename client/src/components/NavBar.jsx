@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 import { Menu, X, Mountain, User, MessageCircle, Home, Compass, Users } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import useChatStore from '../store/useChatStore';
 
 const NavBar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const { conversations } = useChatStore();
+
+  const unreadCount = conversations.reduce((acc, curr) => acc + (curr.unreadCount || 0), 0);
 
   // Helper to check active state
   const isActive = (path) => location.pathname === path ? "text-green-700 font-semibold" : "text-gray-600 hover:text-green-600";
@@ -34,9 +38,14 @@ const NavBar = () => {
               <Users className="w-4 h-4" />
               Groups
             </Link>
-            <Link to="/messages" className={`${isActive('/messages')} transition-colors text-sm font-medium flex items-center gap-1.5`}>
+            <Link to="/messages" className={`${isActive('/messages')} transition-colors text-sm font-medium flex items-center gap-1.5 relative`}>
               <MessageCircle className="w-4 h-4" />
               Messages
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-3 bg-red-500 text-white text-[10px] font-bold h-4 w-4 bg-red-500 rounded-full flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </Link>
 
             {/* Profile Icon */}
@@ -93,10 +102,17 @@ const NavBar = () => {
             <Link
               to="/messages"
               onClick={() => setIsOpen(false)}
-              className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-green-700 hover:bg-green-50"
+              className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-green-700 hover:bg-green-50 justify-between"
             >
-              <MessageCircle className="w-5 h-5" />
-              Messages
+              <div className="flex items-center gap-3">
+                <MessageCircle className="w-5 h-5" />
+                Messages
+              </div>
+              {unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </Link>
             <div className="border-t border-gray-100 my-2 pt-2">
               <Link

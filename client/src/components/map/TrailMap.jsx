@@ -1,221 +1,148 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, LayersControl, LayerGroup, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin } from 'lucide-react'; // Fixed import case sensitivity
+import mi from 'leaflet/dist/images/marker-icon.png';
+import ms from 'leaflet/dist/images/marker-shadow.png';
 
-// Fix for default Leaflet marker icons in React
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+L.Marker.prototype.options.icon = L.icon({ iconUrl: mi, shadowUrl: ms, iconSize: [25, 41], iconAnchor: [12, 41] });
 
-let DefaultIcon = L.icon({
-    iconUrl: icon,
-    shadowUrl: iconShadow,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41]
-});
+const dot = (bg, e) => L.divIcon({ className: '', html: `<div style="background:${bg};width:26px;height:26px;border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.3);font-size:14px">${e}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] });
 
-L.Marker.prototype.options.icon = DefaultIcon;
+const EMOJI = {
+  // Accommodation
+  hotel:'🏠', guest_house:'🏡', hostel:'🛏️', alpine_hut:'🛖', camp_site:'⛺', chalet:'🏡',
+  // Food
+  restaurant:'🍴', cafe:'☕', bar:'🍺', pub:'🍺', fast_food:'🍟', drinking_water:'🚰',
+  // Nature
+  peak:'🏔️', spring:'💧', cliff:'🪨', cave_entrance:'🕳️', water:'🌊', waterfall:'💦', park:'🌿', nature_reserve:'🌲',
+  // Views & Attractions
+  viewpoint:'👁️', attraction:'⭐', museum:'🏛️', information:'ℹ️', monument:'🗿', memorial:'🪦', ruins:'🏚️', tower:'🗼'
+};
 
-// Custom Icons
-const createCustomIcon = (color, label) => {
-    return L.divIcon({
-        className: 'custom-div-icon',
-        html: `<div style="background-color: ${color}; width: 24px; height: 24px; border-radius: 50%; border: 2px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
-             <span style="color: white; font-size: 14px; font-weight: bold;">${label[0]}</span>
-           </div>`,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
+const LABELS = {
+  hotel:'Hotel', guest_house:'Guest House', hostel:'Hostel', alpine_hut:'Mountain Hut', camp_site:'Campsite', chalet:'Chalet',
+  restaurant:'Restaurant', cafe:'Cafe', bar:'Bar', pub:'Pub', fast_food:'Fast Food', drinking_water:'Drinking Water',
+  peak:'Mountain Peak', spring:'Spring', cliff:'Cliff', cave_entrance:'Cave', water:'Lake', waterfall:'Waterfall', park:'Park', nature_reserve:'Nature Reserve',
+  viewpoint:'Viewpoint', attraction:'Attraction', museum:'Museum', information:'Info Point', monument:'Monument', memorial:'Memorial', ruins:'Ruins', tower:'Tower'
+};
+
+const poiIcon = t => {
+  const e = EMOJI[t] || EMOJI[Object.keys(EMOJI).find(k => t?.includes(k))] || '📍';
+  return L.divIcon({ className: '', html: `<span style="font-size:20px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">${e}</span>`, iconSize: [22, 22], iconAnchor: [11, 11] });
+};
+
+const FILTERS = [
+  { id: 'stay', label: 'Accommodation', icon: '🏠', tags: [['tourism','hotel'],['tourism','guest_house'],['tourism','hostel'],['tourism','alpine_hut'],['tourism','camp_site'],['tourism','chalet']] },
+  { id: 'food', label: 'Food & Drink', icon: '🍴', tags: [['amenity','restaurant'],['amenity','cafe'],['amenity','bar'],['amenity','pub'],['amenity','fast_food'],['amenity','drinking_water']] },
+  { id: 'nature', label: 'Nature', icon: '🏔️', tags: [['natural','peak'],['natural','spring'],['natural','cliff'],['natural','cave_entrance'],['natural','water'],['waterway','waterfall'],['leisure','park'],['leisure','nature_reserve']] },
+  { id: 'views', label: 'Viewpoints', icon: '👁️', tags: [['tourism','viewpoint'],['tourism','attraction'],['tourism','museum'],['tourism','information'],['historic','monument'],['historic','memorial'],['historic','ruins'],['man_made','tower']] },
+];
+
+const distToTrail = (lat, lng, trail) => {
+  let min = Infinity;
+  for (let i = 0; i < trail.length; i++) {
+    const d = Math.sqrt((lat - trail[i][0]) ** 2 + (lng - trail[i][1]) ** 2);
+    if (d < min) min = d;
+  }
+  return min;
+};
+
+const search = async (bbox, filters) => {
+  let q = '';
+  filters.forEach(f => f.tags.forEach(([k, v]) => { q += `node["${k}"="${v}"](${bbox});`; }));
+  try {
+    const r = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST', body: 'data=' + encodeURIComponent(`[out:json][timeout:25];(${q});out 300;`)
     });
+    const d = await r.json();
+    return (d.elements || []).filter(e => e.lat && e.lon).map(e => {
+      const t = e.tags || {};
+      const type = t.tourism || t.amenity || t.natural || t.waterway || t.leisure || t.historic || t.man_made || 'place';
+      return { lat: e.lat, lng: e.lon, name: t.name || t['name:en'] || LABELS[type] || type.replace(/_/g, ' '), type };
+    });
+  } catch { return []; }
 };
 
-const StartIcon = createCustomIcon('#22c55e', 'S'); // Green
-const EndIcon = createCustomIcon('#ef4444', 'E');   // Red
-const PoiIcon = (type) => {
-    let color = '#3b82f6';
-    let label = 'P';
-    if (type.includes('water')) { color = '#0ea5e9'; label = 'W'; }
-    if (type.includes('food') || type.includes('tea')) { color = '#f97316'; label = 'F'; }
-    if (type.includes('hotel') || type.includes('lodge')) { color = '#8b5cf6'; label = 'H'; }
+const Fit = ({ b }) => { const m = useMap(); useEffect(() => { if (b) m.fitBounds(b, { padding: [50, 50] }); }, [b, m]); return null; };
 
-    return createCustomIcon(color, label);
-};
+export default function TrailMap({ geoJson, startLocation }) {
+  const [on, setOn] = useState([]);
+  const [pois, setPois] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const flip = id => setOn(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
 
-// Component to handle map bounds and updates
-const MapUpdater = ({ center, bounds }) => {
-    const map = useMap();
-    useEffect(() => {
-        if (bounds) {
-            map.fitBounds(bounds, { padding: [50, 50] });
-        } else if (center) {
-            map.setView(center, 13);
-        }
-    }, [center, bounds, map]);
-    return null;
-};
+  const { route, bounds } = useMemo(() => {
+    let coords = [];
+    const feats = geoJson?.geo_json?.features;
+    if (feats) { const l = feats.find(f => f.geometry.type === 'LineString'); if (l) coords = l.geometry.coordinates; }
+    if (!coords.length && geoJson?.route?.coordinates) coords = geoJson.route.coordinates;
+    if (!coords.length && startLocation?.lat) {
+      const { lat, lng } = startLocation;
+      coords = [[lng, lat], [lng + .01, lat + .01], [lng + .005, lat + .02]];
+    }
+    const route = coords.map(c => [Number(c[1]), Number(c[0])]).filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b));
+    let bounds = null;
+    if (route.length) {
+      const la = route.map(p => p[0]), ln = route.map(p => p[1]);
+      bounds = [[Math.min(...la), Math.min(...ln)], [Math.max(...la), Math.max(...ln)]];
+    }
+    return { route, bounds };
+  }, [geoJson, startLocation]);
 
-const TrailMap = ({ geoJson, startLocation }) => {
+  useEffect(() => {
+    if (!on.length || !bounds) { setPois([]); return; }
+    let dead = false;
+    const run = async () => {
+      setBusy(true);
+      const p = 0.02;
+      const bb = `${bounds[0][0]-p},${bounds[0][1]-p},${bounds[1][0]+p},${bounds[1][1]+p}`;
+      const raw = await search(bb, FILTERS.filter(f => on.includes(f.id)));
+      const nearby = raw.filter(poi => distToTrail(poi.lat, poi.lng, route) < 0.015);
+      if (!dead) { setPois(nearby); setBusy(false); }
+    };
+    const t = setTimeout(run, 350);
+    return () => { dead = true; clearTimeout(t); };
+  }, [on, bounds, route]);
 
-    // Parse GeoJSON and Route Data
-    const { positions, bounds, pois } = useMemo(() => {
-        let positions = [];
-        let pois = [];
-        let bounds = null;
+  const s = route[0], e = route.at(-1);
+  const c = s || (startLocation?.lat ? [startLocation.lat, startLocation.lng] : [27.7172, 85.324]);
 
-        if (geoJson) {
-            // 1. Route Line
-            let coordinates = [];
-            if (geoJson.geo_json?.features) {
-                const lineString = geoJson.geo_json.features.find(f => f.geometry.type === 'LineString');
-                if (lineString) coordinates = lineString.geometry.coordinates;
+  return (
+    <div className="relative h-full w-full">
+      <div className="absolute z-[1000] bottom-6 left-3 flex items-center gap-1.5 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg px-2 py-1.5">
+        {FILTERS.map(f => (
+          <button key={f.id} onClick={() => flip(f.id)}
+            className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${on.includes(f.id) ? 'bg-blue-600 text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>
+            <span>{f.icon}</span><span className="hidden sm:inline">{f.label}</span>
+          </button>
+        ))}
+        {on.length > 0 && <button onClick={() => { setOn([]); setPois([]); }} className="ml-0.5 text-gray-400 hover:text-red-500 text-sm font-bold">✕</button>}
+        {busy && <div className="ml-1 w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />}
+      </div>
+      {pois.length > 0 && !busy && <div className="absolute z-[1000] bottom-[68px] left-3 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">{pois.length} found</div>}
 
-                // Extract POIs from features
-                pois = geoJson.geo_json.features
-                    .filter(f => f.geometry.type === 'Point' && f.properties?.amenity)
-                    .map(f => ({
-                        lat: f.geometry.coordinates[1],
-                        lng: f.geometry.coordinates[0],
-                        name: f.properties.name || f.properties.amenity,
-                        type: f.properties.amenity
-                    }));
-
-            } else if (geoJson.route?.coordinates) {
-                coordinates = geoJson.route.coordinates;
-            }
-
-            // Convert [lng, lat] -> [lat, lng] for Leaflet
-            // GeoJSON is [lng, lat], Leaflet wants [lat, lng]
-            if (coordinates.length > 0) {
-                // Check format and filter invalid coords
-                positions = coordinates
-                    .map(coord => {
-                        const lat = Number(coord[1]);
-                        const lng = Number(coord[0]);
-                        return (Number.isFinite(lat) && Number.isFinite(lng)) ? [lat, lng] : null;
-                    })
-                    .filter(p => p !== null);
-
-                if (positions.length > 0) {
-                    // Calculate bounds
-                    const lats = positions.map(p => p[0]);
-                    const lngs = positions.map(p => p[1]);
-                    bounds = [
-                        [Math.min(...lats), Math.min(...lngs)],
-                        [Math.max(...lats), Math.max(...lngs)]
-                    ];
-                }
-            }
-        }
-
-        // Validate POIs
-        pois = pois.filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
-
-        // Fallback for demo if no geoJson but startLocation exists
-        if (positions.length === 0 && startLocation && Number.isFinite(startLocation.lat) && Number.isFinite(startLocation.lng)) {
-            const { lat, lng } = startLocation;
-            // Mock small route
-            positions = [
-                [lat, lng],
-                [lat + 0.01, lng + 0.01],
-                [lat + 0.02, lng + 0.005]
-            ];
-            bounds = [
-                [lat, lng],
-                [lat + 0.02, lng + 0.01]
-            ];
-        }
-
-        return { positions, bounds, pois };
-    }, [geoJson, startLocation]);
-
-    const startPoint = positions.length > 0 ? positions[0] : null;
-    const endPoint = positions.length > 0 ? positions[positions.length - 1] : null;
-
-    // Default center
-    // Default center with validation
-    const defaultCenter = [27.7172, 85.3240];
-    const center = startPoint ||
-        (startLocation && typeof startLocation.lat === 'number' && typeof startLocation.lng === 'number'
-            ? [startLocation.lat, startLocation.lng]
-            : defaultCenter);
-
-    return (
-        <MapContainer
-            center={center}
-            zoom={13}
-            style={{ height: '100%', width: '100%', zIndex: 0 }}
-            scrollWheelZoom={false}
-        >
-            <LayersControl position="topright">
-                <LayersControl.BaseLayer checked name="OpenStreetMap">
-                    <TileLayer
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
-                </LayersControl.BaseLayer>
-                <LayersControl.BaseLayer name="Satellite">
-                    <TileLayer
-                        attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-                        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                    />
-                </LayersControl.BaseLayer>
-                <LayersControl.BaseLayer name="Topo">
-                    <TileLayer
-                        attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
-                        url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
-                    />
-                </LayersControl.BaseLayer>
-
-                {/* POI Layer Group */}
-                <LayersControl.Overlay checked name="Points of Interest">
-                    <LayerGroup>
-                        {pois.map((poi, idx) => (
-                            <Marker
-                                key={`poi-${idx}`}
-                                position={[poi.lat, poi.lng]}
-                                icon={PoiIcon(poi.type)}
-                            >
-                                <Popup>
-                                    <div className="text-sm font-bold capitalize">{poi.name}</div>
-                                    <div className="text-xs text-gray-500 capitalize">{poi.type}</div>
-                                </Popup>
-                            </Marker>
-                        ))}
-                    </LayerGroup>
-                </LayersControl.Overlay>
-            </LayersControl>
-
-            {/* Route Polyline */}
-            {positions.length > 0 && (
-                <Polyline
-                    positions={positions}
-                    color="#2563eb" // Blue route
-                    weight={4}
-                    opacity={0.8}
-                />
-            )}
-
-            {/* Start Marker */}
-            {startPoint && (
-                <Marker position={startPoint} icon={StartIcon}>
-                    <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
-                        Start
-                    </Tooltip>
-                </Marker>
-            )}
-
-            {/* End Marker */}
-            {endPoint && (
-                <Marker position={endPoint} icon={EndIcon}>
-                    <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
-                        End
-                    </Tooltip>
-                </Marker>
-            )}
-
-            <MapUpdater center={center} bounds={bounds} />
-        </MapContainer>
-    );
-};
-
-export default TrailMap;
+      <MapContainer center={c} zoom={13} scrollWheelZoom={true} touchZoom={true} doubleClickZoom={true} dragging={true} style={{ height: '100%', width: '100%', zIndex: 0 }}>
+        <LayersControl position="topright">
+          <LayersControl.BaseLayer checked name="Street"><TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /></LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="Satellite"><TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" /></LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="Topo"><TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" /></LayersControl.BaseLayer>
+        </LayersControl>
+        {route.length > 0 && <Polyline positions={route} color="#2563eb" weight={4} opacity={0.85} />}
+        {s && <Marker position={s} icon={dot('#16a34a','🚩')}><Tooltip permanent direction="top" offset={[0,-12]}>Start</Tooltip></Marker>}
+        {e && <Marker position={e} icon={dot('#dc2626','🏁')}><Tooltip permanent direction="top" offset={[0,-12]}>End</Tooltip></Marker>}
+        <LayerGroup>
+          {pois.map((p, i) => (
+            <Marker key={`${p.lat}-${p.lng}-${i}`} position={[p.lat, p.lng]} icon={poiIcon(p.type)}>
+              <Popup>
+                <b style={{textTransform:'capitalize'}}>{p.name}</b><br/>
+                <small style={{color:'#888'}}>{LABELS[p.type] || p.type.replace(/_/g,' ')}</small>
+              </Popup>
+            </Marker>
+          ))}
+        </LayerGroup>
+        <Fit b={bounds} />
+      </MapContainer>
+    </div>
+  );
+}

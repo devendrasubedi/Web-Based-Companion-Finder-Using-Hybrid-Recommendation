@@ -9,9 +9,6 @@ import { stat } from "fs";
 
 export const signup = async (req, res) => {
     const { email, password, name, dob, phone, province, district, gender } = req.body;
-    console.log("Signup Request Body:", req.body);
-    console.log("JWT_SECRET available:", !!process.env.JWT_SECRET);
-    console.log("MONGO_URI available:", !!process.env.MONGO_URI);
 
     try {
         if (!email) throw new Error("Email is required");
@@ -24,7 +21,6 @@ export const signup = async (req, res) => {
         if (!gender) throw new Error("Gender is required");
 
         const userAlreadyExists = await User.findOne({ email });
-        console.log("userAlreadyExists", userAlreadyExists)
         if (userAlreadyExists) {
             return res.status(400).json({ success: false, message: "User already exists" });
         }

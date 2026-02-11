@@ -32,19 +32,15 @@ app.use(cookieParser()); //to parse cookies from request
 
 // Debug middleware to log all requests
 app.use((req, res, next) => {
-  console.log(`📍 [${new Date().toISOString()}] ${req.method} ${req.path}`);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
 });
 
-console.log('🔧 Setting up API routes...');
+console.log('Setting up API routes...');
 app.use("/api/auth", authRoutes);
-console.log('✓ Auth routes mounted at /api/auth');
 app.use("/api/users", userRoutes);
-console.log('✓ User routes mounted at /api/users');
 app.use("/api/trails", trailRoutes);
-console.log('✓ Trail routes mounted at /api/trails');
 app.use("/api/chat", chatRoutes);
-console.log('✓ Chat routes mounted at /api/chat');
 
 // app.listen(PORT, () => {
 //   connectDB()
@@ -56,11 +52,11 @@ const startServer = async () => {
 
     // Initialize Socket.IO
     initializeSocket(io);
-    console.log('✓ Socket.IO initialized');
+    console.log('Socket.IO initialized');
 
     httpServer.listen(PORT, () => {
-      console.log(`🚀 Server listening on port ${PORT}`)
-      console.log(`📡 Socket.IO ready for connections`)
+      console.log(`Server listening on port ${PORT}`)
+      console.log(`Socket.IO ready for connections`)
     })
   } catch (error) {
     console.log("Failed to start server:", error)

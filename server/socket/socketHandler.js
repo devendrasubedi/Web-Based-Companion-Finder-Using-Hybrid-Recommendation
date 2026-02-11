@@ -38,7 +38,7 @@ export const initializeSocket = (io) => {
 
     io.on("connection", (socket) => {
         const userId = socket.userId;
-        console.log(`✅ User connected: ${userId} (Socket: ${socket.id})`);
+        console.log(`User connected: ${userId} (Socket: ${socket.id})`);
 
         // Store user's socket connection
         onlineUsers.set(userId.toString(), socket.id);
@@ -224,7 +224,7 @@ export const initializeSocket = (io) => {
 
         // Handle disconnection
         socket.on("disconnect", () => {
-            console.log(`❌ User disconnected: ${userId} (Socket: ${socket.id})`);
+            console.log(`User disconnected: ${userId} (Socket: ${socket.id})`);
 
             // Remove user from online users
             onlineUsers.delete(userId.toString());

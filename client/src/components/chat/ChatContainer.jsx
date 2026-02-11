@@ -41,55 +41,12 @@ const ChatContainer = () => {
     // Fetch conversations on mount
     useEffect(() => {
         fetchConversations();
+        return () => setActiveConversation(null);
     }, []);
 
-    // Set up socket event listeners
-    useEffect(() => {
-        if (!socket) return;
 
-        // Online users
-        socket.on('online_users', ({ userIds }) => {
-            setOnlineUsers(userIds);
-        });
+    // Socket event listeners are handled globally in SocketContext
 
-        socket.on('user_online', ({ userId }) => {
-            addOnlineUser(userId);
-        });
-
-        socket.on('user_offline', ({ userId }) => {
-            removeOnlineUser(userId);
-        });
-
-        // New message
-        socket.on('new_message', (message) => {
-            addMessage(message);
-
-            // Mark as read if conversation is active
-            if (activeConversation && message.conversationId === activeConversation._id) {
-                socket.emit('mark_read', { conversationId: activeConversation._id });
-            }
-        });
-
-        // Conversation updated
-        socket.on('conversation_updated', (updatedConv) => {
-            updateConversation(updatedConv);
-        });
-
-        // Typing indicators
-        socket.on('user_typing', ({ conversationId, userId, isTyping }) => {
-            setTyping(conversationId, userId, isTyping);
-        });
-
-        // Cleanup
-        return () => {
-            socket.off('online_users');
-            socket.off('user_online');
-            socket.off('user_offline');
-            socket.off('new_message');
-            socket.off('conversation_updated');
-            socket.off('user_typing');
-        };
-    }, [socket, activeConversation]);
 
     const fetchConversations = async () => {
         try {
