@@ -25,6 +25,10 @@ const TrailDetails = () => {
   const [showImageGallery, setShowImageGallery] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
+  // Review State
+  const [newReview, setNewReview] = useState({ rating: 0, comment: '' });
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
   // Ref for map scrolling
   const mapSectionRef = useRef(null);
 
@@ -158,6 +162,40 @@ const TrailDetails = () => {
   };
 
   // C
+  const handleReviewSubmit = async () => {
+    if (!user) return;
+    if (newReview.rating === 0) return alert("Please select a rating");
+
+    try {
+      setIsSubmittingReview(true);
+      const response = await axios.post(`/api/trails/${id}/reviews`, {
+        userId: user._id, // Assuming user object has _id
+        userName: user.name,
+        userImage: user.profilePicture, // Optional
+        rating: newReview.rating,
+        comment: newReview.comment
+      });
+
+      if (response.data) {
+        // Update local state with new reviews and rating
+        setTrail(prev => ({
+          ...prev,
+          reviews: response.data.reviews,
+          rating: response.data.rating,
+          numReviews: response.data.numReviews
+        }));
+
+        // Reset form
+        setNewReview({ rating: 0, comment: '' });
+      }
+    } catch (error) {
+      console.error("Error submitting review:", error);
+      alert(error.response?.data?.message || "Failed to submit review");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
   // Compute images array safely
   const allImages = React.useMemo(() => {
     if (!trail) return ["https://via.placeholder.com/800x400?text=Trail"];
@@ -584,29 +622,77 @@ const TrailDetails = () => {
         <div className="bg-white rounded-xl shadow-sm border border-border p-5 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-foreground text-lg font-bold">Reviews ({reviews.length})</h2>
-            <button className="text-primary text-sm font-medium hover:underline">Write a Review</button>
           </div>
+
+          {/* Review Form */}
+          {user ? (
+            <div className="mb-6 bg-gray-50 p-4 rounded-lg border border-border">
+              <h3 className="text-sm font-semibold mb-3">Write a Review</h3>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Rating:</span>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setNewReview(prev => ({ ...prev, rating: star }))}
+                        className="focus:outline-none transition-transform hover:scale-110"
+                      >
+                        <Star
+                          className={`w-6 h-6 ${star <= newReview.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'}`}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <textarea
+                  value={newReview.comment}
+                  onChange={(e) => setNewReview(prev => ({ ...prev, comment: e.target.value }))}
+                  placeholder="Share your experience..."
+                  className="w-full px-3 py-2 text-sm border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary min-h-[80px]"
+                />
+                <button
+                  onClick={handleReviewSubmit}
+                  disabled={isSubmittingReview || !newReview.comment.trim() || newReview.rating === 0}
+                  className="self-end px-4 py-2 bg-primary text-white text-sm font-medium rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isSubmittingReview ? 'Posting...' : 'Post Review'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-6 p-4 bg-blue-50 text-blue-700 rounded-lg text-sm">
+              Please <button onClick={() => navigate('/login')} className="font-bold hover:underline">login</button> to leave a review.
+            </div>
+          )}
 
           {reviews.length === 0 ? (
             <div className="text-center py-8 bg-gray-50 rounded-lg">
-              <p className="text-muted-foreground text-sm">No reviews yet.</p>
+              <p className="text-muted-foreground text-sm">No reviews yet. Be the first to review!</p>
             </div>
           ) : (
             <div className="space-y-3">
               {reviews.map((review, idx) => (
                 <div key={review.id || idx} className="p-4 bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                      <User className="w-4 h-4 text-primary" />
+                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center overflow-hidden">
+                      {review.userImage ? (
+                        <img src={review.userImage} alt={review.userName} className="w-full h-full object-cover" />
+                      ) : (
+                        <User className="w-4 h-4 text-primary" />
+                      )}
                     </div>
                     <div>
                       <p className="text-foreground text-sm font-semibold">{review.userName || 'User'}</p>
                       <div className="flex items-center gap-1">
-                        <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                        <span className="text-xs text-muted-foreground">{review.rating}</span>
+                        <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+                        <span className="text-xs font-medium text-foreground">{review.rating}</span>
                       </div>
                     </div>
-                    <span className="ml-auto text-xs text-muted-foreground">{review.date}</span>
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {new Date(review.createdAt).toLocaleDateString()}
+                    </span>
                   </div>
                   <p className="text-foreground/80 text-sm">{review.comment}</p>
                 </div>
