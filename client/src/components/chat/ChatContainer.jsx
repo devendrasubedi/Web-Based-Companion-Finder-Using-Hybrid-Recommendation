@@ -255,20 +255,23 @@ const ChatContainer = () => {
                 <div className="p-4 border-b border-border">
                     <div className="flex items-center justify-between mb-3">
                         <h2 className="text-xl font-semibold">Messages</h2>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1 sm:gap-2">
                             <button
                                 onClick={() => setShowCreateGroup(true)}
-                                className="p-2 hover:bg-muted rounded-lg transition-colors"
+                                className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-muted rounded-lg transition-colors text-sm font-medium border border-transparent hover:border-border"
                                 title="Create Group"
                             >
-                                <Plus className="w-5 h-5" />
+                                <Plus className="w-4 h-4 text-primary" />
+                                <span className="hidden sm:inline">New Group</span>
+                                <span className="sm:hidden">Group</span>
                             </button>
                             <button
                                 onClick={() => setShowSearch(!showSearch)}
-                                className="p-2 hover:bg-muted rounded-lg transition-colors"
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium border ${showSearch ? 'bg-primary/10 border-primary/20 text-primary' : 'hover:bg-muted border-transparent hover:border-border'}`}
                                 title="Search Users"
                             >
-                                {showSearch ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
+                                {showSearch ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
+                                <span>Search User</span>
                             </button>
                         </div>
                     </div>
