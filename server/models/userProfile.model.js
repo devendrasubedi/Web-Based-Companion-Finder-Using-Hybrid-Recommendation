@@ -79,5 +79,5 @@ const userProfileSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-const profileDb = mongoose.connection.useDb('user_profile_db');
-export const UserProfile = profileDb.model('UserProfile', userProfileSchema);
+const profileDb = mongoose.connection.useDb('auth_db');
+export const UserProfile = profileDb.model('userprofiles', userProfileSchema);
