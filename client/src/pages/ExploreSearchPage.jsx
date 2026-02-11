@@ -42,7 +42,43 @@ const ExploreSearchPage = () => {
         setError(null);
         const response = await axios.get('/api/trails');
         console.log('Fetched trails:', response.data);
-        setAllTrails(response.data || []);
+
+        let initialTrails = response.data || [];
+
+        // 1. INSTANT LOAD from LocalStorage if available
+        try {
+          const cachedImages = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
+          initialTrails = initialTrails.map(t => {
+            const img = cachedImages[t.id] || cachedImages[String(t._id)];
+            return img ? { ...t, image: img } : t;
+          });
+        } catch (e) { console.error("Error reading image cache", e); }
+
+        setAllTrails(initialTrails);
+
+        // 2. Background Fetch for missing images
+        if (initialTrails.length > 0) {
+          const trailIds = initialTrails.map(t => t.id || t._id);
+
+          // Non-blocking call
+          axios.post('/api/trails/batch-images', { ids: trailIds })
+            .then(imgResp => {
+              const imagesMap = imgResp.data;
+              console.log('Fetched batch images:', Object.keys(imagesMap).length);
+
+              try {
+                const currentCache = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
+                localStorage.setItem('trail_images_cache', JSON.stringify({ ...currentCache, ...imagesMap }));
+              } catch (e) { /* ignore */ }
+
+              setAllTrails(prev => prev.map(t => {
+                const newImage = imagesMap[String(t.id)] || imagesMap[String(t._id)];
+                return newImage ? { ...t, image: newImage } : t;
+              }));
+            })
+            .catch(e => console.error("Background image fetch failed", e));
+        }
+
       } catch (err) {
         console.error('Error fetching trails:', err);
         setError(err.message);
