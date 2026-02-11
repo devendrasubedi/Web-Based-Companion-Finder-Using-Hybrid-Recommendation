@@ -15,10 +15,13 @@ const ProfileCard = ({
   const handleFriendAction = (e) => {
     e.stopPropagation();
 
+    // Use _id preferably, fallback to id
+    const userId = user._id || user.id;
+
     if (friendStatus === 'request_received' && onAcceptRequest) {
-      onAcceptRequest(user.id, user.name);
+      onAcceptRequest(userId, user.name);
     } else if (friendStatus === 'none' && onAddFriend) {
-      onAddFriend(user.id, user.name);
+      onAddFriend(userId, user.name);
     }
   };
 

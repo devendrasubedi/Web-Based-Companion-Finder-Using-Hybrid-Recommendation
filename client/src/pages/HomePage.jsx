@@ -35,12 +35,28 @@ const HomePage = ({ userName = "Traveler" }) => {
   const popularTrails = trails.slice(5);
   
   const recommendedFriends = users.filter(user => {
+    if (!authUser) return true;
+
+    // Normalize IDs to string for safe comparison
+    const currentUserId = String(authUser._id || authUser.id);
+    const targetUserId = String(user._id || user.id);
+
     // Exclude own profile
-    if (authUser && user._id === authUser._id) return false;
+    if (currentUserId === targetUserId) return false;
     
     // Exclude users who are already friends
-    if (authUser && authUser.friends) {
-      const isFriend = authUser.friends.some(friend => friend.userId === user._id);
+    if (authUser.friends && Array.isArray(authUser.friends)) {
+      const isFriend = authUser.friends.some(friend => {
+        // Handle potential different structures of friend object
+        let friendId = friend.userId;
+        
+        // If populated, it might be an object
+        if (typeof friendId === 'object' && friendId !== null) {
+          friendId = friendId._id || friendId;
+        }
+        
+        return String(friendId) === targetUserId;
+      });
       if (isFriend) return false;
     }
     
@@ -272,11 +288,11 @@ const HomePage = ({ userName = "Traveler" }) => {
             className="flex overflow-x-auto gap-4 pb-6 -mx-4 px-4 md:mx-0 md:px-0 hide-scrollbar snap-x snap-mandatory"
           >
             {recommendedFriends.map((user) => (
-              <div key={user.id} className="w-[260px] md:w-[300px] shrink-0 snap-start">
+              <div key={user._id} className="w-[260px] md:w-[300px] shrink-0 snap-start">
                 <ProfileCard
                   user={user}
-                  onClick={() => navigate(`/profile/${user.id}`)}
-                  friendStatus={friendStatuses[user.id] || 'none'}
+                  onClick={() => navigate(`/profile/${user._id}`)}
+                  friendStatus={friendStatuses[user._id] || 'none'}
                   onAddFriend={handleAddFriend}
                   onAcceptRequest={handleAcceptRequest}
                 />
