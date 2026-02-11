@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useAuthStore } from '../store/authStore';
 import TrailMap from '../components/map/TrailMap';
 import ElevationChart from '../components/map/ElevationChart';
 // TerrainAnalysis removed
@@ -15,6 +16,7 @@ const TrailDetails = () => {
   // --- 1. ROUTING & STATE ---
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const [isFavorite, setIsFavorite] = useState(false);
   const [trail, setTrail] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,6 +79,47 @@ const TrailDetails = () => {
     }
   }, [id]);
 
+  // Check if trail is already saved in user profile
+  useEffect(() => {
+    if (user && user.savedHikes && id) {
+      const isSaved = user.savedHikes.some(hike => {
+        const hikeId = typeof hike === 'string' ? hike : hike.id || hike._id;
+        return hikeId === id;
+      });
+      setIsFavorite(isSaved);
+    }
+  }, [user, id]);
+
+  const handleToggleSave = async () => {
+    if (!user) {
+      // Redirect to login or show toast
+      alert("Please login to save trails");
+      return;
+    }
+
+    try {
+      const previousState = isFavorite;
+      setIsFavorite(!previousState); // Optimistic update
+
+      const response = await axios.post('/api/users/saved-hikes', {
+        trailId: id,
+        trailName: trail?.name
+      });
+
+      if (response.data.success) {
+        // Update local auth store if needed to keep UI in sync across pages
+        //Ideally updateAuthUser({ ...user, savedHikes: response.data.savedHikes });
+        // For now, simpler approach or assume page refresh updates it
+      } else {
+        setIsFavorite(previousState); // Revert on failure
+      }
+    } catch (error) {
+      console.error("Error saving trail:", error);
+      setIsFavorite(!isFavorite); // Revert on error
+    }
+  };
+
+  // C
   // Compute images array safely
   const allImages = React.useMemo(() => {
     if (!trail) return ["https://via.placeholder.com/800x400?text=Trail"];
@@ -301,9 +344,9 @@ const TrailDetails = () => {
             )}
 
             <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-border">
-              {/* BACKEND TODO: Connect to User Favorites API */}
+              {/* Connected to User Favorites API */}
               <button
-                onClick={() => setIsFavorite(!isFavorite)}
+                onClick={handleToggleSave}
                 className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all ${isFavorite ? 'bg-primary text-white' : 'bg-white border border-border hover:bg-gray-50'
                   }`}
               >

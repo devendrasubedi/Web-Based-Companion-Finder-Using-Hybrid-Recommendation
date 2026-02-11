@@ -1,5 +1,5 @@
 import express from "express";
-import { getAllUsers, getUserProfile } from "../controllers/user.controller.js";
+import { getAllUsers, getUserProfile, toggleSavedHike } from "../controllers/user.controller.js";
 import { verifyToken } from "../middleware/verifyToken.js";
 
 const router = express.Router();
@@ -8,6 +8,9 @@ console.log('Setting up user routes - getAllUsers:', typeof getAllUsers, 'getUse
 
 // Get all users (for homepage cards)
 router.get("/", getAllUsers);
+
+// Toggle saved hike
+router.post("/saved-hikes", verifyToken, toggleSavedHike);
 
 // Get specific user profile
 router.get("/:id", getUserProfile);
