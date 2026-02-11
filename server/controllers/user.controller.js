@@ -92,3 +92,55 @@ export const toggleSavedHike = async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };
+
+export const toggleCompletedHike = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { trailId, trailName } = req.body;
+
+        if (!trailId) {
+            return res.status(400).json({ success: false, message: "Trail ID is required" });
+        }
+
+        const userProfile = await UserProfile.findOne({ userId });
+
+        if (!userProfile) {
+            return res.status(404).json({ success: false, message: "User profile not found" });
+        }
+
+        // Check if hike is already marked as completed
+        const existingIndex = userProfile.pastHikes.findIndex(hike => {
+            const id = typeof hike === 'string' ? hike : hike.id || hike._id;
+            return id.toString() === trailId.toString();
+        });
+
+        let isCompleted = false;
+
+        if (existingIndex > -1) {
+            // Remove from completed
+            userProfile.pastHikes.splice(existingIndex, 1);
+            isCompleted = false;
+        } else {
+            // Add to completed
+            userProfile.pastHikes.push({
+                id: trailId,
+                name: trailName || "Unknown Trail",
+                completedAt: new Date()
+            });
+            isCompleted = true;
+        }
+
+        await userProfile.save();
+
+        res.status(200).json({
+            success: true,
+            isCompleted,
+            pastHikes: userProfile.pastHikes,
+            message: isCompleted ? "Trail marked as completed" : "Trail removed from completed"
+        });
+
+    } catch (error) {
+        console.log("Error in toggleCompletedHike: ", error);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+};

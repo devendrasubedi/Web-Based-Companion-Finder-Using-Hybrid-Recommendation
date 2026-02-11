@@ -1,9 +1,61 @@
 import React from 'react';
-import { MapPin, Languages, UserPlus } from 'lucide-react';
+import { MapPin, Languages, UserPlus, UserCheck, Clock } from 'lucide-react';
 
-const ProfileCard = ({ user, onClick, showAddButton = true }) => {
+const ProfileCard = ({
+  user,
+  onClick,
+  showAddButton = true,
+  friendStatus = 'none', // 'none', 'friends', 'request_sent', 'request_received'
+  onAddFriend,
+  onAcceptRequest
+}) => {
   // Guard clause to prevent crashes if user data is missing
   if (!user) return null;
+
+  const handleFriendAction = (e) => {
+    e.stopPropagation();
+
+    if (friendStatus === 'request_received' && onAcceptRequest) {
+      onAcceptRequest(user.id, user.name);
+    } else if (friendStatus === 'none' && onAddFriend) {
+      onAddFriend(user.id, user.name);
+    }
+  };
+
+  const getButtonContent = () => {
+    switch (friendStatus) {
+      case 'friends':
+        return {
+          icon: <UserCheck className="w-4 h-4" />,
+          text: 'Friends',
+          className: 'bg-green-100 text-green-700 cursor-default',
+          disabled: true
+        };
+      case 'request_sent':
+        return {
+          icon: <Clock className="w-4 h-4" />,
+          text: 'Request Sent',
+          className: 'bg-gray-100 text-gray-600 cursor-default',
+          disabled: true
+        };
+      case 'request_received':
+        return {
+          icon: <UserPlus className="w-4 h-4" />,
+          text: 'Accept Request',
+          className: 'bg-blue-600 text-white hover:bg-blue-700',
+          disabled: false
+        };
+      default:
+        return {
+          icon: <UserPlus className="w-4 h-4" />,
+          text: 'Add Friend',
+          className: 'bg-green-600 text-white hover:bg-green-700',
+          disabled: false
+        };
+    }
+  };
+
+  const buttonConfig = getButtonContent();
 
   return (
     <div
@@ -37,14 +89,12 @@ const ProfileCard = ({ user, onClick, showAddButton = true }) => {
       </div>
       {showAddButton && (
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            // Add friend logic here
-          }}
-          className="w-full mt-4 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+          onClick={handleFriendAction}
+          disabled={buttonConfig.disabled}
+          className={`w-full mt-4 py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium ${buttonConfig.className}`}
         >
-          <UserPlus className="w-4 h-4" />
-          Add Friend
+          {buttonConfig.icon}
+          {buttonConfig.text}
         </button>
       )}
     </div>

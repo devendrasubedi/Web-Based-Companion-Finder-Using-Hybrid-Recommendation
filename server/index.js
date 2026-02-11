@@ -11,6 +11,7 @@ import authRoutes from './routes/auth.route.js'
 import userRoutes from './routes/user.route.js'
 import trailRoutes from './routes/trailRoutes.js'
 import chatRoutes from './routes/chat.route.js'
+import friendRoutes from './routes/friend.route.js'
 import { initializeSocket } from './socket/socketHandler.js';
 
 dotenv.config();
@@ -45,6 +46,8 @@ app.use("/api/trails", trailRoutes);
 console.log('✓ Trail routes mounted at /api/trails');
 app.use("/api/chat", chatRoutes);
 console.log('✓ Chat routes mounted at /api/chat');
+app.use("/api/friends", friendRoutes);
+console.log('✓ Friend routes mounted at /api/friends');
 
 // app.listen(PORT, () => {
 //   connectDB()
