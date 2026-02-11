@@ -70,6 +70,23 @@ const userProfileSchema = new mongoose.Schema({
     },
     pastHikes: [], // Allow mixed data (strings or objects)
     savedHikes: [], // Allow mixed data (strings or objects)
+    friends: [{
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        name: String,
+        addedAt: { type: Date, default: Date.now }
+    }],
+    friendRequests: {
+        sent: [{
+            userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            name: String,
+            sentAt: { type: Date, default: Date.now }
+        }],
+        received: [{
+            userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            name: String,
+            receivedAt: { type: Date, default: Date.now }
+        }]
+    },
     languagesKnown: {
         type: [String],
         default: []

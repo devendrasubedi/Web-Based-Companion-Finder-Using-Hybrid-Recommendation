@@ -7,9 +7,11 @@ import ProfileCard from '../components/ProfileCard';
 import Footer from '../components/Footer';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { useAuthStore } from '../store/authStore';
 
 const HomePage = ({ userName = "Traveler" }) => {
   const navigate = useNavigate();
+  const { user: authUser } = useAuthStore();
   const friendScrollRef = useRef(null);
   const popularScrollRef = useRef(null);
 
@@ -17,6 +19,7 @@ const HomePage = ({ userName = "Traveler" }) => {
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [friendStatuses, setFriendStatuses] = useState({});
 
   const scroll = (ref, direction) => {
     if (ref.current) {
@@ -30,7 +33,59 @@ const HomePage = ({ userName = "Traveler" }) => {
 
   const recommendedTrails = trails.slice(0, 13);
   const popularTrails = trails.slice(5);
-  const recommendedFriends = users;
+  
+  const recommendedFriends = users.filter(user => {
+    // Exclude own profile
+    if (authUser && user._id === authUser._id) return false;
+    
+    // Exclude users who are already friends
+    if (authUser && authUser.friends) {
+      const isFriend = authUser.friends.some(friend => friend.userId === user._id);
+      if (isFriend) return false;
+    }
+    
+    return true;
+  });
+
+  const handleAddFriend = async (userId, userName) => {
+    try {
+      const response = await axios.post('/api/friends/request', {
+        receiverId: userId,
+        receiverName: userName
+      });
+
+      if (response.data.success) {
+        // Update friend status to request_sent
+        setFriendStatuses(prev => ({
+          ...prev,
+          [userId]: 'request_sent'
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to send friend request:", error);
+      alert(error.response?.data?.message || "Failed to send friend request");
+    }
+  };
+
+  const handleAcceptRequest = async (userId, userName) => {
+    try {
+      const response = await axios.post('/api/friends/accept', {
+        senderId: userId,
+        senderName: userName
+      });
+
+      if (response.data.success) {
+        // Update friend status to friends
+        setFriendStatuses(prev => ({
+          ...prev,
+          [userId]: 'friends'
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to accept friend request:", error);
+      alert("Failed to accept friend request");
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -41,59 +96,59 @@ const HomePage = ({ userName = "Traveler" }) => {
         // Standard Pattern: Fetch dependent data in parallel
         // We use Promise.allSettled to ensure one failure doesn't block the other content
         const [trailsResult, usersResult] = await Promise.allSettled([
-            axios.get('/api/trails'),
-            axios.get('/api/users')
+          axios.get('/api/trails'),
+          axios.get('/api/users')
         ]);
 
         // Process Trails
         if (trailsResult.status === 'fulfilled') {
-            const initialTrails = (trailsResult.value.data || []).map(t => {
-                // INSTANT LOAD from LocalStorage
+          const initialTrails = (trailsResult.value.data || []).map(t => {
+            // INSTANT LOAD from LocalStorage
+            try {
+              const cachedImages = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
+              if (cachedImages[t.id]) {
+                return { ...t, image: cachedImages[t.id] };
+              }
+            } catch (e) {/* ignore */ }
+            return t;
+          });
+          setTrails(initialTrails);
+
+          // Lazy Load Images in Background
+          if (initialTrails.length > 0) {
+            const trailIds = initialTrails.map(t => t.id);
+            // Non-blocking call
+            axios.post('/api/trails/batch-images', { ids: trailIds })
+              .then(imgResp => {
+                const imagesMap = imgResp.data;
                 try {
-                    const cachedImages = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
-                    if (cachedImages[t.id]) {
-                        return { ...t, image: cachedImages[t.id] };
-                    }
-                } catch(e) {/* ignore */}
-                return t;
-            });
-            setTrails(initialTrails);
+                  const currentCache = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
+                  localStorage.setItem('trail_images_cache', JSON.stringify({ ...currentCache, ...imagesMap }));
+                } catch (e) {/* ignore */ }
 
-            // Lazy Load Images in Background
-            if (initialTrails.length > 0) {
-                const trailIds = initialTrails.map(t => t.id);
-                // Non-blocking call
-                axios.post('/api/trails/batch-images', { ids: trailIds })
-                    .then(imgResp => {
-                        const imagesMap = imgResp.data;
-                        try {
-                            const currentCache = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
-                            localStorage.setItem('trail_images_cache', JSON.stringify({ ...currentCache, ...imagesMap }));
-                        } catch(e) {/* ignore */}
-
-                        setTrails(prevTrails => prevTrails.map(t => {
-                            const newImage = imagesMap[String(t.id)];
-                            return newImage ? { ...t, image: newImage } : t;
-                        }));
-                    })
-                    .catch(e => console.error("Background image fetch failed", e));
-            }
+                setTrails(prevTrails => prevTrails.map(t => {
+                  const newImage = imagesMap[String(t.id)];
+                  return newImage ? { ...t, image: newImage } : t;
+                }));
+              })
+              .catch(e => console.error("Background image fetch failed", e));
+          }
         } else {
-            console.error('Trails fetch failed:', trailsResult.reason);
-            setError("Failed to load trails. Please try again.");
+          console.error('Trails fetch failed:', trailsResult.reason);
+          setError("Failed to load trails. Please try again.");
         }
 
         // Process Users
         if (usersResult.status === 'fulfilled') {
-            setUsers((usersResult.value.data || []).map(u => ({ 
-                id: u._id || u.id, 
-                name: u.name || 'Trekker',
-                province: u.province || 'Nepal',
-                district: u.district || 'Unknown'
-            })));
+          setUsers((usersResult.value.data || []).map(u => ({
+            id: u._id || u.id,
+            name: u.name || 'Trekker',
+            province: u.province || 'Nepal',
+            district: u.district || 'Unknown'
+          })));
         } else {
-            console.error('Users fetch failed:', usersResult.reason);
-            // We don't block the page if users fail, just log it
+          console.error('Users fetch failed:', usersResult.reason);
+          // We don't block the page if users fail, just log it
         }
 
       } catch (err) {
@@ -221,6 +276,9 @@ const HomePage = ({ userName = "Traveler" }) => {
                 <ProfileCard
                   user={user}
                   onClick={() => navigate(`/profile/${user.id}`)}
+                  friendStatus={friendStatuses[user.id] || 'none'}
+                  onAddFriend={handleAddFriend}
+                  onAcceptRequest={handleAcceptRequest}
                 />
               </div>
             ))}

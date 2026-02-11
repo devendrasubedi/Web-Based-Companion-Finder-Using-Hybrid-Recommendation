@@ -9,7 +9,7 @@ import WeatherForecast from '../components/TrailDetails/WeatherForecast';
 import {
   MapPin, Star, Heart, Navigation, Calendar, Ruler,
   TrendingUp, DollarSign, Home,
-  User, ArrowRight, ArrowLeft, X, ChevronLeft, ChevronRight
+  User, ArrowRight, ArrowLeft, X, ChevronLeft, ChevronRight, CheckCircle
 } from 'lucide-react';
 
 const TrailDetails = () => {
@@ -18,6 +18,7 @@ const TrailDetails = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [isFavorite, setIsFavorite] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
   const [trail, setTrail] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -33,7 +34,7 @@ const TrailDetails = () => {
       try {
         setIsLoading(true);
         setError(null);
-        
+
         // 1. Fetch Core Data (Fastest - Text only)
         // We await this because we need the basic trail structure to render the page layout
         const response = await axios.get(`/api/trails/${id}`);
@@ -43,25 +44,25 @@ const TrailDetails = () => {
 
         // 2. Fire-and-forget lazy loaders for heavy assets (Images and Map)
         // We do NOT await these together, they run in parallel and update state independently
-        
+
         // Load Images
         const loadImages = async () => {
-            try {
-                const mediaResp = await axios.get(`/api/trails/${id}/media`);
-                if (mediaResp.data.images && mediaResp.data.images.length > 0) {
-                     setTrail(prev => ({ ...prev, images: mediaResp.data.images }));
-                }
-            } catch (ignored) { console.warn("Image fetch failed", ignored); }
+          try {
+            const mediaResp = await axios.get(`/api/trails/${id}/media`);
+            if (mediaResp.data.images && mediaResp.data.images.length > 0) {
+              setTrail(prev => ({ ...prev, images: mediaResp.data.images }));
+            }
+          } catch (ignored) { console.warn("Image fetch failed", ignored); }
         };
 
         // Load Map Data
         const loadMap = async () => {
-             try {
-                const mapResp = await axios.get(`/api/trails/${id}/map`);
-                if (mapResp.data.geoJson) {
-                    setTrail(prev => ({ ...prev, geoJson: mapResp.data.geoJson }));
-                }
-             } catch (ignored) { console.warn("Map fetch failed", ignored); }
+          try {
+            const mapResp = await axios.get(`/api/trails/${id}/map`);
+            if (mapResp.data.geoJson) {
+              setTrail(prev => ({ ...prev, geoJson: mapResp.data.geoJson }));
+            }
+          } catch (ignored) { console.warn("Map fetch failed", ignored); }
         };
 
         // Start both independent fetches
@@ -72,7 +73,7 @@ const TrailDetails = () => {
         console.error('Error fetching trail:', err);
         setError(err.message || 'Failed to load trail details');
         setIsLoading(false);
-      } 
+      }
     };
     if (id) {
       fetchTrail();
@@ -87,6 +88,17 @@ const TrailDetails = () => {
         return hikeId === id;
       });
       setIsFavorite(isSaved);
+    }
+  }, [user, id]);
+
+  // Check if trail is already completed in user profile
+  useEffect(() => {
+    if (user && user.pastHikes && id) {
+      const isCompleted = user.pastHikes.some(hike => {
+        const hikeId = typeof hike === 'string' ? hike : hike.id || hike._id;
+        return hikeId === id;
+      });
+      setIsCompleted(isCompleted);
     }
   }, [user, id]);
 
@@ -116,6 +128,32 @@ const TrailDetails = () => {
     } catch (error) {
       console.error("Error saving trail:", error);
       setIsFavorite(!isFavorite); // Revert on error
+    }
+  };
+
+  const handleToggleCompleted = async () => {
+    if (!user) {
+      alert("Please login to mark trails as completed");
+      return;
+    }
+
+    try {
+      const previousState = isCompleted;
+      setIsCompleted(!previousState); // Optimistic update
+
+      const response = await axios.post('/api/users/completed-hikes', {
+        trailId: id,
+        trailName: trail?.name
+      });
+
+      if (response.data.success) {
+        // Success - the optimistic update is already applied
+      } else {
+        setIsCompleted(previousState); // Revert on failure
+      }
+    } catch (error) {
+      console.error("Error marking trail as completed:", error);
+      setIsCompleted(!isCompleted); // Revert on error
     }
   };
 
@@ -352,6 +390,16 @@ const TrailDetails = () => {
               >
                 <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
                 {isFavorite ? 'Saved' : 'Save'}
+              </button>
+
+              {/* Completed Button */}
+              <button
+                onClick={handleToggleCompleted}
+                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all ${isCompleted ? 'bg-green-600 text-white' : 'bg-white border border-border hover:bg-gray-50'
+                  }`}
+              >
+                <CheckCircle className={`w-4 h-4 ${isCompleted ? 'fill-current' : ''}`} />
+                {isCompleted ? 'Completed' : 'Mark Complete'}
               </button>
 
               <button
