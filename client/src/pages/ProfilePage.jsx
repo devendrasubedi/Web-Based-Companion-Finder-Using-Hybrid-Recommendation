@@ -23,6 +23,8 @@ function ProfilePage() {
   const [friendRequests, setFriendRequests] = useState([]);
 
 
+  const [friendStatus, setFriendStatus] = useState('none');
+
   // If no ID param, it's own profile. If ID matches authUser ID, it's own profile.
   const isOwnProfile = !id || (authUser && id === authUser._id);
 
@@ -49,6 +51,16 @@ function ProfilePage() {
           // Fetch other user
           const fetchedUser = await getUserProfile(id);
           setUser(fetchedUser);
+
+          // Fetch friend status
+          try {
+            const response = await axios.get(`/api/friends/status/${id}`);
+            if (response.data.success) {
+              setFriendStatus(response.data.status);
+            }
+          } catch (error) {
+            console.error("Failed to fetch friend status:", error);
+          }
         }
       } catch (error) {
         console.error("Failed to fetch user:", error);
@@ -130,6 +142,26 @@ function ProfilePage() {
     }
   };
 
+  const handleRemoveCurrentFriend = async () => {
+    if (!user || !user._id) return;
+
+    if (!confirm(`Are you sure you want to remove ${user.name} from your friends?`)) {
+      return;
+    }
+
+    try {
+      const response = await axios.delete(`/api/friends/${user._id}`);
+      if (response.data.success) {
+        setFriendStatus('none');
+        alert("Friend removed successfully");
+        // Optionally redirect or refresh
+      }
+    } catch (error) {
+      console.error("Failed to remove friend:", error);
+      alert("Failed to remove friend");
+    }
+  };
+
   const handleSave = async () => {
     try {
       await updateProfile(editedUser);
@@ -184,6 +216,8 @@ function ProfilePage() {
           onLogout={handleLogout}
           editedUser={editedUser}
           setEditedUser={setEditedUser}
+          friendStatus={friendStatus}
+          onRemoveCurrentFriend={handleRemoveCurrentFriend}
         />
 
         {/* Friend Requests Section (Only for own profile) */}
