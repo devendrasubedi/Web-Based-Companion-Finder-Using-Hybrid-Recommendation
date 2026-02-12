@@ -1,11 +1,12 @@
 import express from 'express';
-import { 
-    getAllTrails, 
-    getTrailById, 
+import {
+    getAllTrails,
+    getTrailById,
     getTrailImage,
     getTrailImagesBatch,
     getTrailMedia,
-    getTrailMapData
+    getTrailMapData,
+    addReview
 } from '../controllers/trailController.js';
 
 const router = express.Router();
@@ -25,5 +26,8 @@ router.get('/:id', getTrailById);
 // NEW: Routes for separate resources (lazy loading)
 router.get('/:id/media', getTrailMedia);
 router.get('/:id/map', getTrailMapData);
+
+// NEW: Add review
+router.post('/:id/reviews', addReview);
 
 export default router;

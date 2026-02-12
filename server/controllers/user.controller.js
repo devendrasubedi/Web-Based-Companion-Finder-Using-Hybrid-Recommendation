@@ -4,10 +4,35 @@ import { UserProfile } from "../models/userProfile.model.js";
 // Get all users (minimal info for cards/homepage)
 export const getAllUsers = async (req, res) => {
     try {
-        console.log('getAllUsers endpoint hit');
         const users = await User.find({}).select("_id name email").limit(20);
-        console.log('Users found:', users.length);
-        res.status(200).json(users);
+
+        const usersWithProfile = await Promise.all(users.map(async (user) => {
+            const profile = await UserProfile.findOne({ userId: user._id }).select("province district dob gender languages");
+            
+            let age = "";
+            if (profile?.dob) {
+                const birthDate = new Date(profile.dob);
+                if (!isNaN(birthDate.getTime())) {
+                    const today = new Date();
+                    age = today.getFullYear() - birthDate.getFullYear();
+                    const m = today.getMonth() - birthDate.getMonth();
+                    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                        age--;
+                    }
+                }
+            }
+
+            return {
+                ...user._doc,
+                province: profile?.province || "",
+                district: profile?.district || "",
+                age: age,
+                gender: profile?.gender || "",
+                languages: profile?.languages || []
+            };
+        }));
+
+        res.status(200).json(usersWithProfile);
     } catch (error) {
         console.log("Error in getAllUsers: ", error);
         res.status(500).json({ success: false, message: error.message });
@@ -25,11 +50,42 @@ export const getUserProfile = async (req, res) => {
 
         const userProfile = await UserProfile.findOne({ userId: id });
 
+        let friendsWithDetails = [];
+        if (userProfile && userProfile.friends && userProfile.friends.length > 0) {
+            friendsWithDetails = await Promise.all(userProfile.friends.map(async (friend) => {
+                const friendProfile = await UserProfile.findOne({ userId: friend.userId }).select('province');
+                // Convert mongoose object to plain object to allow adding properties if needed, 
+                // though friend is usually a subdoc.
+                const friendObj = friend.toObject ? friend.toObject() : friend;
+                return {
+                    ...friendObj,
+                    province: friendProfile?.province || ""
+                };
+            }));
+        }
+
+        const userDoc = userProfile ? userProfile.toObject() : {}; // Convert to POJO to allow overriding friends
+        if (friendsWithDetails.length > 0) {
+            userDoc.friends = friendsWithDetails;
+        }
+
+        // Calculate Age if DOB exists
+        if (userDoc.dob) {
+            const today = new Date();
+            const birthDate = new Date(userDoc.dob);
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const m = today.getMonth() - birthDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            userDoc.age = age;
+        }
+
         res.status(200).json({
             success: true,
             user: {
                 ...user._doc,
-                ...userProfile?._doc
+                ...userDoc
             }
         });
 
@@ -89,6 +145,58 @@ export const toggleSavedHike = async (req, res) => {
 
     } catch (error) {
         console.log("Error in toggleSavedHike: ", error);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
+
+export const toggleCompletedHike = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { trailId, trailName } = req.body;
+
+        if (!trailId) {
+            return res.status(400).json({ success: false, message: "Trail ID is required" });
+        }
+
+        const userProfile = await UserProfile.findOne({ userId });
+
+        if (!userProfile) {
+            return res.status(404).json({ success: false, message: "User profile not found" });
+        }
+
+        // Check if hike is already marked as completed
+        const existingIndex = userProfile.pastHikes.findIndex(hike => {
+            const id = typeof hike === 'string' ? hike : hike.id || hike._id;
+            return id.toString() === trailId.toString();
+        });
+
+        let isCompleted = false;
+
+        if (existingIndex > -1) {
+            // Remove from completed
+            userProfile.pastHikes.splice(existingIndex, 1);
+            isCompleted = false;
+        } else {
+            // Add to completed
+            userProfile.pastHikes.push({
+                id: trailId,
+                name: trailName || "Unknown Trail",
+                completedAt: new Date()
+            });
+            isCompleted = true;
+        }
+
+        await userProfile.save();
+
+        res.status(200).json({
+            success: true,
+            isCompleted,
+            pastHikes: userProfile.pastHikes,
+            message: isCompleted ? "Trail marked as completed" : "Trail removed from completed"
+        });
+
+    } catch (error) {
+        console.log("Error in toggleCompletedHike: ", error);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };
