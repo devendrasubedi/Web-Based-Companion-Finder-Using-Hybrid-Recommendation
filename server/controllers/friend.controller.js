@@ -24,20 +24,31 @@ export const sendFriendRequest = async (req, res) => {
             return res.status(404).json({ success: false, message: "User profile not found" });
         }
 
+        // Initialize friendRequests and friends if not exists
+        if (!senderProfile.friendRequests) senderProfile.friendRequests = { sent: [], received: [] };
+        if (!senderProfile.friendRequests.sent) senderProfile.friendRequests.sent = [];
+        if (!senderProfile.friendRequests.received) senderProfile.friendRequests.received = [];
+        if (!senderProfile.friends) senderProfile.friends = [];
+
+        if (!receiverProfile.friendRequests) receiverProfile.friendRequests = { sent: [], received: [] };
+        if (!receiverProfile.friendRequests.sent) receiverProfile.friendRequests.sent = [];
+        if (!receiverProfile.friendRequests.received) receiverProfile.friendRequests.received = [];
+        if (!receiverProfile.friends) receiverProfile.friends = [];
+
         // Check if already friends
-        const alreadyFriends = senderProfile.friends?.some(f => f.userId.toString() === receiverId);
+        const alreadyFriends = senderProfile.friends.some(f => f.userId?.toString() === receiverId);
         if (alreadyFriends) {
             return res.status(400).json({ success: false, message: "Already friends" });
         }
 
         // Check if request already sent
-        const requestAlreadySent = senderProfile.friendRequests?.sent?.some(r => r.userId.toString() === receiverId);
+        const requestAlreadySent = senderProfile.friendRequests.sent.some(r => r.userId?.toString() === receiverId);
         if (requestAlreadySent) {
             return res.status(400).json({ success: false, message: "Friend request already sent" });
         }
 
         // Check if request already received from this user
-        const requestAlreadyReceived = senderProfile.friendRequests?.received?.some(r => r.userId.toString() === receiverId);
+        const requestAlreadyReceived = senderProfile.friendRequests.received.some(r => r.userId?.toString() === receiverId);
         if (requestAlreadyReceived) {
             return res.status(400).json({ success: false, message: "This user has already sent you a friend request" });
         }
@@ -45,14 +56,6 @@ export const sendFriendRequest = async (req, res) => {
         // Get sender name
         const sender = await User.findById(senderId);
         const senderName = sender?.name || "Unknown User";
-
-        // Initialize friendRequests if not exists
-        if (!senderProfile.friendRequests) {
-            senderProfile.friendRequests = { sent: [], received: [] };
-        }
-        if (!receiverProfile.friendRequests) {
-            receiverProfile.friendRequests = { sent: [], received: [] };
-        }
 
         // Add to sender's sent requests
         senderProfile.friendRequests.sent.push({
@@ -104,17 +107,24 @@ export const acceptFriendRequest = async (req, res) => {
         const user = await User.findById(userId);
         const userName = user?.name || "Unknown User";
 
+        // Initialize friendRequests and friends if not exists
+        if (!userProfile.friendRequests) userProfile.friendRequests = { sent: [], received: [] };
+        if (!userProfile.friendRequests.sent) userProfile.friendRequests.sent = [];
+        if (!userProfile.friendRequests.received) userProfile.friendRequests.received = [];
+        if (!userProfile.friends) userProfile.friends = [];
+
+        if (!senderProfile.friendRequests) senderProfile.friendRequests = { sent: [], received: [] };
+        if (!senderProfile.friendRequests.sent) senderProfile.friendRequests.sent = [];
+        if (!senderProfile.friendRequests.received) senderProfile.friendRequests.received = [];
+        if (!senderProfile.friends) senderProfile.friends = [];
+
         // Remove from friend requests
         userProfile.friendRequests.received = userProfile.friendRequests.received.filter(
-            r => r.userId.toString() !== senderId
+            r => r.userId?.toString() !== senderId
         );
         senderProfile.friendRequests.sent = senderProfile.friendRequests.sent.filter(
-            r => r.userId.toString() !== userId
+            r => r.userId?.toString() !== userId
         );
-
-        // Initialize friends array if not exists
-        if (!userProfile.friends) userProfile.friends = [];
-        if (!senderProfile.friends) senderProfile.friends = [];
 
         // Add to friends list
         userProfile.friends.push({
@@ -162,12 +172,23 @@ export const rejectFriendRequest = async (req, res) => {
             return res.status(404).json({ success: false, message: "User profile not found" });
         }
 
+        // Initialize friendRequests and friends if not exists
+        if (!userProfile.friendRequests) userProfile.friendRequests = { sent: [], received: [] };
+        if (!userProfile.friendRequests.sent) userProfile.friendRequests.sent = [];
+        if (!userProfile.friendRequests.received) userProfile.friendRequests.received = [];
+        if (!userProfile.friends) userProfile.friends = [];
+
+        if (!senderProfile.friendRequests) senderProfile.friendRequests = { sent: [], received: [] };
+        if (!senderProfile.friendRequests.sent) senderProfile.friendRequests.sent = [];
+        if (!senderProfile.friendRequests.received) senderProfile.friendRequests.received = [];
+        if (!senderProfile.friends) senderProfile.friends = [];
+
         // Remove from friend requests
         userProfile.friendRequests.received = userProfile.friendRequests.received.filter(
-            r => r.userId.toString() !== senderId
+            r => r.userId?.toString() !== senderId
         );
         senderProfile.friendRequests.sent = senderProfile.friendRequests.sent.filter(
-            r => r.userId.toString() !== userId
+            r => r.userId?.toString() !== userId
         );
 
         await Promise.all([userProfile.save(), senderProfile.save()]);
@@ -202,12 +223,16 @@ export const removeFriend = async (req, res) => {
             return res.status(404).json({ success: false, message: "User profile not found" });
         }
 
+        // Initialize friends array if not exists
+        if (!userProfile.friends) userProfile.friends = [];
+        if (!friendProfile.friends) friendProfile.friends = [];
+
         // Remove from both friends lists
         userProfile.friends = userProfile.friends.filter(
-            f => f.userId.toString() !== friendId
+            f => f.userId?.toString() !== friendId
         );
         friendProfile.friends = friendProfile.friends.filter(
-            f => f.userId.toString() !== userId
+            f => f.userId?.toString() !== userId
         );
 
         await Promise.all([userProfile.save(), friendProfile.save()]);
@@ -286,19 +311,19 @@ export const getFriendStatus = async (req, res) => {
         }
 
         // Check if friends
-        const isFriend = userProfile.friends?.some(f => f.userId.toString() === targetUserId);
+        const isFriend = userProfile.friends?.some(f => f.userId?.toString() === targetUserId);
         if (isFriend) {
             return res.status(200).json({ success: true, status: "friends" });
         }
 
         // Check if request sent
-        const requestSent = userProfile.friendRequests?.sent?.some(r => r.userId.toString() === targetUserId);
+        const requestSent = userProfile.friendRequests?.sent?.some(r => r.userId?.toString() === targetUserId);
         if (requestSent) {
             return res.status(200).json({ success: true, status: "request_sent" });
         }
 
         // Check if request received
-        const requestReceived = userProfile.friendRequests?.received?.some(r => r.userId.toString() === targetUserId);
+        const requestReceived = userProfile.friendRequests?.received?.some(r => r.userId?.toString() === targetUserId);
         if (requestReceived) {
             return res.status(200).json({ success: true, status: "request_received" });
         }
