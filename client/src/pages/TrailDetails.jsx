@@ -152,10 +152,10 @@ const TrailDetails = () => {
         // Lazy-load heavy assets in parallel
         axios.get(`/api/trails/${id}/media`).then(({ data: m }) => {
           if (!cancelled && m.images?.length) setTrail((p) => ({ ...p, images: m.images }));
-        }).catch(() => {});
+        }).catch(() => { });
         axios.get(`/api/trails/${id}/map`).then(({ data: m }) => {
-          if (!cancelled && m.geoJson) setTrail((p) => ({ ...p, geoJson: m.geoJson }));
-        }).catch(() => {});
+          if (!cancelled && m.features?.length) setTrail((p) => ({ ...p, geoJson: m }));
+        }).catch(() => { });
       } catch (err) {
         if (!cancelled) { setError(err.message || 'Failed to load trail'); setIsLoading(false); }
       }
@@ -377,12 +377,12 @@ const TrailDetails = () => {
             <div className="flex-1 h-full min-h-[250px] rounded-lg overflow-hidden border border-border relative z-0">
               <TrailMap geoJson={trail.geoJson} startLocation={trail.location} />
             </div>
-            <div className="lg:w-1/3 flex flex-col">
+            <div className="lg:w-1/3 flex flex-col min-h-[200px]"> {/* Added min-h for mobile stability */}
               <div className="h-full bg-gray-50 rounded-lg p-2.5 border border-border flex flex-col">
                 <h3 className="text-xs font-bold text-foreground mb-1.5 flex items-center gap-1.5">
                   <TrendingUp className="w-3.5 h-3.5 text-primary" /> Elevation Profile
                 </h3>
-                <div className="flex-1 w-full min-h-0">
+                <div className="flex-1 w-full min-h-0 overflow-hidden"> {/* Added overflow-hidden */}
                   <ElevationChart geoJson={trail.geoJson} trailData={trail} />
                 </div>
               </div>

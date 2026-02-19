@@ -2,7 +2,6 @@ import express from 'express';
 import {
     getAllTrails,
     getTrailById,
-    getTrailImage,
     getTrailImagesBatch,
     getTrailMedia,
     getTrailMapData,
@@ -11,23 +10,40 @@ import {
 
 const router = express.Router();
 
-// Route for the "Card" view (List)
+/* ==============================
+   TRAIL LIST (CARDS)
+============================== */
 router.get('/', getAllTrails);
 
-// NEW: Batch fetch images
+
+/* ==============================
+   BATCH IMAGES (CARDS PERFORMANCE)
+============================== */
 router.post('/batch-images', getTrailImagesBatch);
 
-// Route to get an image for a trail - make it explicit so it doesn't conflict with /:id
-router.get('/image/:trailId', getTrailImage);
 
-// Route for the "Single Page" view (Details)
+/* ==============================
+   SINGLE TRAIL DETAILS
+============================== */
 router.get('/:id', getTrailById);
 
-// NEW: Routes for separate resources (lazy loading)
+
+/* ==============================
+   TRAIL MEDIA (GALLERY)
+============================== */
 router.get('/:id/media', getTrailMedia);
+
+
+/* ==============================
+   TRAIL MAP (GEOJSON)
+============================== */
 router.get('/:id/map', getTrailMapData);
 
-// NEW: Add review
+
+/* ==============================
+   ADD REVIEW
+============================== */
 router.post('/:id/reviews', addReview);
+
 
 export default router;

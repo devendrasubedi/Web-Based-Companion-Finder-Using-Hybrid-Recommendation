@@ -321,18 +321,25 @@ export const getTrailMedia = async (req, res) => {
     }
 };
 
-// NEW: Get Map Data separately
+// Get Map Data separately — updated for new GeoJSON schema
 export const getTrailMapData = async (req, res) => {
     try {
         const { id } = req.params;
-        let geoJsonData = null;
-        try {
-            geoJsonData = await TrailGeoJSON.findOne({ trail_id: id }).lean();
-        } catch (geoError) {
-            console.error(`Error fetching GeoJSON for trail ${id}:`, geoError);
+        // Use findOne with trailId (String) instead of findById (which expects ObjectId by default)
+        const geoData = await TrailGeoJSON.findOne({ trailId: id }).lean();
+
+        if (!geoData) {
+            return res.status(404).json({ message: `No map data found for trail ${id}` });
         }
-        res.status(200).json({ geoJson: geoJsonData });
+
+        res.status(200).json({
+            type: "FeatureCollection",
+            trailId: geoData.trailId,
+            totalDistanceKm: geoData.totalDistanceKm,
+            features: geoData.features  // each has geometry + properties.name + properties.distanceKm
+        });
     } catch (error) {
+        console.error(`[getTrailMapData] Error fetching GeoJSON for trail ${req.params.id}:`, error);
         res.status(500).json({ message: error.message });
     }
 };
