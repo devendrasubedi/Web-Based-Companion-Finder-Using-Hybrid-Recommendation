@@ -62,7 +62,7 @@ export const WELCOME_EMAIL_TEMPLATE = `
       <span style="${styles.brand}">TrekMate</span>
     </div>
     <div style="${styles.body}">
-      <h1 style="${styles.heading}">Welcome to the trail, {name}! 🏔️</h1>
+      <h1 style="${styles.heading}">Welcome to the trail, {name}!</h1>
       <p style="${styles.text}">We're thrilled to have you join the TrekMate community. You've taken the first step towards discovering your next great adventure.</p>
       <p style="${styles.text}">With TrekMate, you can explore thousands of trails, track your progress, and connect with fellow outdoor enthusiasts.</p>
       
@@ -128,7 +128,7 @@ export const PASSWORD_RESET_SUCCESS_TEMPLATE = `
     </div>
     <div style="${styles.body}">
       <div style="text-align: center; margin-bottom: 24px;">
-        <div style="background-color: #556B2F; color: white; width: 64px; height: 64px; line-height: 64px; border-radius: 50%; display: inline-block; font-size: 32px; box-shadow: 0 4px 12px rgba(85, 107, 47, 0.3);">✓</div>
+        <div style="background-color: #556B2F; color: white; width: 64px; height: 64px; line-height: 64px; border-radius: 50%; display: inline-block; font-size: 32px; box-shadow: 0 4px 12px rgba(85, 107, 47, 0.3);"></div>
       </div>
       <h1 style="${styles.heading}; text-align: center;">Password reset complete</h1>
       <p style="${styles.text}">Hi <strong>{name}</strong>,</p>

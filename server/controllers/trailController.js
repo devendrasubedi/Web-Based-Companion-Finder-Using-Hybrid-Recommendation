@@ -34,7 +34,9 @@ export const getAllTrails = async (req, res) => {
                     description: 1,
                     location: 1,
                     duration: { $cond: [{ $ifNull: ["$durationDays", false] }, { $concat: [{ $toString: "$durationDays" }, " days"] }, null] },
-                    tags: 1
+                    tags: 1,
+                    rating: 1,
+                    numReviews: 1
                 }
             }
         ]);
@@ -58,7 +60,8 @@ export const getAllTrails = async (req, res) => {
                 duration: t.duration || 'N/A',
                 image: "https://via.placeholder.com/600x400?text=Loading...", // Placeholder
                 tags: t.tags || [],
-                rating: t.rating || 4.5
+                rating: t.rating || 0,
+                numReviews: t.numReviews || 0
             };
 
             // Log if image is missing
@@ -318,18 +321,25 @@ export const getTrailMedia = async (req, res) => {
     }
 };
 
-// NEW: Get Map Data separately
+// Get Map Data separately — updated for new GeoJSON schema
 export const getTrailMapData = async (req, res) => {
     try {
         const { id } = req.params;
-        let geoJsonData = null;
-        try {
-            geoJsonData = await TrailGeoJSON.findOne({ trail_id: id }).lean();
-        } catch (geoError) {
-            console.error(`Error fetching GeoJSON for trail ${id}:`, geoError);
+        // Use findOne with trailId (String) instead of findById (which expects ObjectId by default)
+        const geoData = await TrailGeoJSON.findOne({ trailId: id }).lean();
+
+        if (!geoData) {
+            return res.status(404).json({ message: `No map data found for trail ${id}` });
         }
-        res.status(200).json({ geoJson: geoJsonData });
+
+        res.status(200).json({
+            type: "FeatureCollection",
+            trailId: geoData.trailId,
+            totalDistanceKm: geoData.totalDistanceKm,
+            features: geoData.features  // each has geometry + properties.name + properties.distanceKm
+        });
     } catch (error) {
+        console.error(`[getTrailMapData] Error fetching GeoJSON for trail ${req.params.id}:`, error);
         res.status(500).json({ message: error.message });
     }
 };
@@ -370,5 +380,47 @@ export const getTrailImage = (req, res) => {
     });
 };
 
+
+
+// NEW: Add a Review
+export const addReview = async (req, res) => {
+    try {
+        const { rating, comment, userId, userName, userImage } = req.body;
+        const trail = await Trail.findById(req.params.id);
+
+        if (trail) {
+            // Check if user already reviewed
+            const alreadyReviewed = trail.reviews.find(
+                (r) => r.userId.toString() === userId.toString()
+            );
+
+            if (alreadyReviewed) {
+                return res.status(400).json({ message: 'Trail already reviewed' });
+            }
+
+            const review = {
+                userName,
+                userId,
+                userImage,
+                rating: Number(rating),
+                comment,
+            };
+
+            trail.reviews.push(review);
+            trail.numReviews = trail.reviews.length;
+
+            trail.rating =
+                trail.reviews.reduce((acc, item) => item.rating + acc, 0) /
+                trail.reviews.length;
+
+            await trail.save();
+            res.status(201).json({ message: 'Review added', reviews: trail.reviews, rating: trail.rating, numReviews: trail.numReviews });
+        } else {
+            res.status(404).json({ message: 'Trail not found' });
+        }
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+}
 
 export { imageCache };

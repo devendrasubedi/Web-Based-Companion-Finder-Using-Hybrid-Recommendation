@@ -20,9 +20,16 @@ const useChatStore = create((set, get) => ({
 
     setMessages: (messages) => set({ messages }),
 
-    addMessage: (message) => set((state) => ({
-        messages: [...state.messages, message]
-    })),
+    addMessage: (message) => set((state) => {
+        if (state.activeConversation && state.activeConversation._id === message.conversationId) {
+            // Check for duplicates
+            const exists = state.messages.some(m => m._id === message._id);
+            if (exists) return state;
+            
+            return { messages: [...state.messages, message] };
+        }
+        return state;
+    }),
 
     updateConversation: (updatedConversation) => set((state) => ({
         conversations: state.conversations.map(conv =>

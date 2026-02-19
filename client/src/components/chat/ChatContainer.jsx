@@ -37,59 +37,17 @@ const ChatContainer = () => {
     const [showSearch, setShowSearch] = useState(false);
     const [showCreateGroup, setShowCreateGroup] = useState(false);
     const [showAddMember, setShowAddMember] = useState(false);
+    const [friends, setFriends] = useState([]);
 
-    // Fetch conversations on mount
+    // Fetch conversations and friends on mount
     useEffect(() => {
         fetchConversations();
+        fetchFriends();
     }, []);
 
-    // Set up socket event listeners
-    useEffect(() => {
-        if (!socket) return;
 
-        // Online users
-        socket.on('online_users', ({ userIds }) => {
-            setOnlineUsers(userIds);
-        });
+    // Socket event listeners are handled globally in SocketContext
 
-        socket.on('user_online', ({ userId }) => {
-            addOnlineUser(userId);
-        });
-
-        socket.on('user_offline', ({ userId }) => {
-            removeOnlineUser(userId);
-        });
-
-        // New message
-        socket.on('new_message', (message) => {
-            addMessage(message);
-
-            // Mark as read if conversation is active
-            if (activeConversation && message.conversationId === activeConversation._id) {
-                socket.emit('mark_read', { conversationId: activeConversation._id });
-            }
-        });
-
-        // Conversation updated
-        socket.on('conversation_updated', (updatedConv) => {
-            updateConversation(updatedConv);
-        });
-
-        // Typing indicators
-        socket.on('user_typing', ({ conversationId, userId, isTyping }) => {
-            setTyping(conversationId, userId, isTyping);
-        });
-
-        // Cleanup
-        return () => {
-            socket.off('online_users');
-            socket.off('user_online');
-            socket.off('user_offline');
-            socket.off('new_message');
-            socket.off('conversation_updated');
-            socket.off('user_typing');
-        };
-    }, [socket, activeConversation]);
 
     const fetchConversations = async () => {
         try {
@@ -102,6 +60,17 @@ const ChatContainer = () => {
             console.error('Error fetching conversations:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchFriends = async () => {
+        try {
+            const response = await axios.get('/api/friends');
+            if (response.data.success) {
+                setFriends(response.data.friends || []);
+            }
+        } catch (error) {
+            console.error('Error fetching friends:', error);
         }
     };
 
@@ -123,8 +92,15 @@ const ChatContainer = () => {
     };
 
     const handleSelectConversation = (conversation) => {
-        setActiveConversation(conversation);
-        fetchMessages(conversation._id);
+        // Check if it's a temporary friend conversation (mock object)
+        if (conversation.mock || conversation._id.startsWith('friend_')) {
+            // It's a friend without a real conversation yet
+            // Call handleStartConversation to create/get the real conversation
+            handleStartConversation(conversation.otherParticipant._id);
+        } else {
+            setActiveConversation(conversation);
+            fetchMessages(conversation._id);
+        }
     };
 
     const handleSearchUsers = async (query) => {
@@ -241,20 +217,23 @@ const ChatContainer = () => {
                 <div className="p-4 border-b border-border">
                     <div className="flex items-center justify-between mb-3">
                         <h2 className="text-xl font-semibold">Messages</h2>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1 sm:gap-2">
                             <button
                                 onClick={() => setShowCreateGroup(true)}
-                                className="p-2 hover:bg-muted rounded-lg transition-colors"
+                                className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-muted rounded-lg transition-colors text-sm font-medium border border-transparent hover:border-border"
                                 title="Create Group"
                             >
-                                <Plus className="w-5 h-5" />
+                                <Plus className="w-4 h-4 text-primary" />
+                                <span className="hidden sm:inline">New Group</span>
+                                <span className="sm:hidden">Group</span>
                             </button>
                             <button
                                 onClick={() => setShowSearch(!showSearch)}
-                                className="p-2 hover:bg-muted rounded-lg transition-colors"
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium border ${showSearch ? 'bg-primary/10 border-primary/20 text-primary' : 'hover:bg-muted border-transparent hover:border-border'}`}
                                 title="Search Users"
                             >
-                                {showSearch ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
+                                {showSearch ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
+                                <span>Search User</span>
                             </button>
                         </div>
                     </div>
@@ -302,8 +281,8 @@ const ChatContainer = () => {
                     )}
                 </div>
 
-                {/* Conversation list */}
-                <ConversationList onSelectConversation={handleSelectConversation} />
+                {/* Conversation list - includes both friends and non-friends */}
+                <ConversationList onSelectConversation={handleSelectConversation} friends={friends} />
             </div>
 
             {/* Chat area */}

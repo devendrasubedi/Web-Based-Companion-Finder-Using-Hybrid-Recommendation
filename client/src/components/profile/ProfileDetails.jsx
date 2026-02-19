@@ -1,4 +1,4 @@
-import { MapPin, Camera, User, Edit2, LogOut, X, Check, Languages } from 'lucide-react';
+import { MapPin, Camera, User, Edit2, LogOut, X, Check, Languages, UserMinus } from 'lucide-react';
 
 // Helper to calculate age
 const calculateAge = (dob) => {
@@ -22,7 +22,9 @@ const ProfileDetails = ({
     onCancel,
     onLogout,
     editedUser,
-    setEditedUser
+    setEditedUser,
+    friendStatus,
+    onRemoveCurrentFriend
 }) => {
 
     // Calculate Age
@@ -119,9 +121,9 @@ const ProfileDetails = ({
                         </div>
 
                         {/* Action Buttons */}
-                        {isOwnProfile && (
-                            <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-                                {isEditing ? (
+                        <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                            {isOwnProfile ? (
+                                isEditing ? (
                                     <>
                                         <button
                                             onClick={onCancel}
@@ -155,9 +157,21 @@ const ProfileDetails = ({
                                             <LogOut className="w-5 h-5" />
                                         </button>
                                     </>
-                                )}
-                            </div>
-                        )}
+                                )
+                            ) : (
+                                <>
+                                    {friendStatus === 'friends' && (
+                                        <button
+                                            onClick={onRemoveCurrentFriend}
+                                            className="flex items-center gap-2 px-5 py-2.5 bg-destructive/10 text-destructive border border-destructive/20 rounded-full hover:bg-destructive/20 transition-all font-medium shadow-sm"
+                                        >
+                                            <UserMinus className="w-4 h-4" />
+                                            Remove Friend
+                                        </button>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     {/* Bio Section */}
