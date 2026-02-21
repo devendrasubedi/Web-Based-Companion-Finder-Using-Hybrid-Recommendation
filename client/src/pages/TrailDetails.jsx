@@ -6,7 +6,7 @@ import TrailMap from '../components/map/TrailMap';
 import ElevationChart from '../components/map/ElevationChart';
 import WeatherForecast from '../components/TrailDetails/WeatherForecast';
 import {
-  MapPin, Star, Heart, Navigation, Calendar, Ruler,
+  Star, Heart, Navigation, Calendar, Ruler,
   TrendingUp, DollarSign, Home, User, ArrowRight,
   ArrowLeft, X, ChevronLeft, ChevronRight, CheckCircle
 } from 'lucide-react';
@@ -38,9 +38,9 @@ const StatItem = ({ icon: Icon, label, value }) => (
     <div className="w-7 h-7 bg-primary/10 rounded-md flex items-center justify-center shrink-0">
       <Icon className="w-3.5 h-3.5 text-primary" />
     </div>
-    <div>
-      <p className="text-muted-foreground text-[10px] leading-tight">{label}</p>
-      <p className="text-foreground text-xs font-medium">{value}</p>
+    <div className="min-w-0 flex-1 overflow-hidden">
+      <p className="text-muted-foreground text-[10px] leading-tight truncate">{label}</p>
+      <p className="text-foreground text-xs font-medium truncate" title={value}>{value}</p>
     </div>
   </div>
 );
@@ -65,13 +65,13 @@ const ImageGallery = ({ images, selectedIndex, onSelect, onClose, trailName }) =
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-3">
+    <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-3 animate-in fade-in duration-200">
       <div className="relative w-full max-w-5xl h-full max-h-[90vh] flex flex-col">
         <button onClick={onClose} className="absolute top-3 right-3 z-10 bg-white/10 hover:bg-white/20 p-2 rounded-full text-white">
           <X className="w-5 h-5" />
         </button>
         <div className="flex-1 flex items-center justify-center mb-3">
-          <Img src={images[selectedIndex]} alt={`${trailName} - ${selectedIndex + 1}`} className="max-w-full max-h-full object-contain rounded-lg" />
+          <Img src={images[selectedIndex]} alt={`${trailName} - ${selectedIndex + 1}`} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
         </div>
         {images.length > 1 && (
           <>
@@ -100,19 +100,19 @@ const ImageGallery = ({ images, selectedIndex, onSelect, onClose, trailName }) =
 };
 
 const PermitCard = ({ permit }) => (
-  <div className="bg-gray-50 rounded-lg p-3 border border-border">
-    <h3 className="font-semibold text-foreground text-sm mb-2">
+  <div className="bg-gray-50/70 rounded-lg p-3 border border-border flex flex-col justify-center">
+    <h4 className="font-semibold text-foreground text-sm mb-1.5 break-words">
       {permit.name} {permit.acronym && <span className="text-muted-foreground text-xs font-normal">({permit.acronym})</span>}
-    </h3>
+    </h4>
     {permit.rates && (
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <div className="flex flex-wrap gap-2 text-xs">
         {['Nepali', 'SAARC', 'Foreigner'].map((type) =>
           permit.rates[type] != null ? (
-            <div key={type} className="bg-white p-2 rounded-md border border-border">
-              <p className="text-[10px] text-muted-foreground uppercase font-bold mb-0.5">
-                {type === 'Nepali' ? 'Nepali Citizen' : type === 'SAARC' ? 'SAARC National' : 'Foreign National'}
-              </p>
-              <p className="font-medium text-foreground text-xs">NPR {permit.rates[type].toLocaleString()}</p>
+            <div key={type} className="bg-white px-2 py-1 rounded border border-border flex items-center gap-1.5 select-all">
+              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
+                {type === 'Nepali' ? 'NPR' : type === 'SAARC' ? 'SAARC' : 'INTL'}
+              </span>
+              <span className="font-bold text-foreground">Rs. {permit.rates[type].toLocaleString()}</span>
             </div>
           ) : null
         )}
@@ -207,6 +207,36 @@ const TrailDetails = () => {
   const heroImages = allImages.slice(0, 3);
   const galleryImages = allImages.slice(3);
 
+  const locationText = useMemo(() => {
+    if (!trail?.location) return 'Nepal';
+    if (typeof trail.location === 'string') return `Nepal | ${trail.location}`;
+    const parts = ['Nepal'];
+    if (trail.location.provinces?.length) {
+      parts.push(trail.location.provinces.join(', '));
+    } else if (trail.province || trail.region) {
+      parts.push(trail.province || trail.region);
+    }
+    if (trail.location.districts?.length) {
+      parts.push(trail.location.districts.join(', '));
+    } else if (trail.district) {
+      parts.push(trail.district);
+    }
+    return parts.join(' | ');
+  }, [trail]);
+
+  const routeText = useMemo(() => {
+    if (typeof trail?.location === 'object' && (trail.location.start || trail.location.end)) {
+      return `${trail.location.start || 'Start'} – ${trail.location.end || 'End'}`;
+    }
+    return null;
+  }, [trail]);
+
+  const infoGrid = useMemo(() => [
+    { label: 'Location', value: locationText },
+    routeText && { label: 'Route', value: routeText },
+    trail?.type && { label: 'Trail Type', value: trail.type },
+  ].filter(Boolean), [locationText, routeText, trail?.type]);
+
   // --- Loading / Error states ---
   if (isLoading) return (
     <div className="min-h-[60vh] flex items-center justify-center">
@@ -233,16 +263,7 @@ const TrailDetails = () => {
 
   const openGallery = (index = 0) => { setSelectedImageIndex(index); setShowGallery(true); };
 
-  const locationText = trail.location
-    ? (typeof trail.location === 'object' ? `${trail.location.start || ''} – ${trail.location.end || ''}` : trail.location)
-    : null;
 
-  const infoGrid = [
-    locationText && { label: 'Location', value: locationText },
-    (trail.province || trail.region) && { label: 'Region', value: trail.province || trail.region },
-    trail.district && { label: 'District', value: trail.district },
-    trail.type && { label: 'Type', value: trail.type },
-  ].filter(Boolean);
 
   const stats = [
     { icon: Calendar, label: 'Duration', value: formatValue(trail.duration, (d) => `${d.min_days || 0}–${d.max_days || 0} days`) || trail.duration || 'N/A' },
@@ -254,26 +275,26 @@ const TrailDetails = () => {
 
   return (
     <div className="min-h-screen bg-background pb-10 pt-3">
-      <div className="w-full px-3 sm:px-5 lg:px-7 max-w-7xl mx-auto">
+      <div className="w-full px-3 sm:px-5 lg:px-7 max-w-7xl mx-auto flex flex-col items-center sm:items-stretch">
 
         {/* Back */}
-        <button onClick={() => navigate(-1)} className="mb-2 flex items-center gap-1.5 text-muted-foreground hover:text-foreground text-xs">
+        <button onClick={() => navigate(-1)} className="mb-2 flex items-center gap-1.5 text-muted-foreground hover:text-foreground text-xs self-start">
           <ArrowLeft className="w-3.5 h-3.5" /> Back
         </button>
 
         {/* Hero */}
-        <section className="bg-white rounded-xl shadow-sm overflow-hidden mb-5 border border-border">
+        <section className="bg-white rounded-xl shadow-sm overflow-hidden mb-5 border border-border w-full">
           <div className="relative h-[30vh] min-h-[220px] w-full flex gap-0.5">
             {heroImages.map((img, i) => (
               <div key={i} className="relative flex-1 overflow-hidden">
-                <Img src={heroImages[Math.min(i, heroImages.length - 1)]} alt={`${trail.name} ${i + 1}`} />
+                <Img src={img} alt={`${trail.name} ${i + 1}`} />
               </div>
             ))}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
-              <div className="flex items-end justify-between">
-                <div>
-                  <h1 className="text-white text-xl sm:text-2xl font-bold mb-1.5 drop-shadow-md">{trail.name}</h1>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+            <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5 pointer-events-none">
+              <div className="flex items-end justify-between pointer-events-auto max-w-full">
+                <div className="max-w-[80%] min-w-0 pr-2">
+                  <h1 className="text-white text-xl sm:text-2xl font-bold mb-1.5 drop-shadow-md truncate break-words">{trail.name}</h1>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`px-2.5 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wide ${getDifficultyColor(trail.difficulty)}`}>
                       {trail.difficulty}
@@ -285,8 +306,8 @@ const TrailDetails = () => {
                   </div>
                 </div>
                 {allImages.length > 3 && (
-                  <button onClick={() => openGallery(0)} className="bg-white/90 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-900 hover:bg-white shadow-md flex items-center gap-1.5">
-                    See All <span className="bg-primary text-white px-1.5 py-0.5 rounded-full text-[10px] font-bold">{allImages.length}</span>
+                  <button onClick={() => openGallery(0)} className="bg-white/90 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-900 hover:bg-white shadow-md flex items-center gap-1.5 shrink-0 flex-nowrap">
+                    See All <span className="bg-primary text-white px-1.5 py-0.5 rounded-full text-[10px] font-bold shrink-0">{allImages.length}</span>
                   </button>
                 )}
               </div>
@@ -295,31 +316,31 @@ const TrailDetails = () => {
 
           <div className="p-4">
             {infoGrid.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4 text-xs w-full">
                 {infoGrid.map(({ label, value }) => (
-                  <div key={label}>
-                    <p className="text-muted-foreground text-[10px]">{label}</p>
-                    <p className="text-foreground font-medium">{value}</p>
+                  <div key={label} className="min-w-0">
+                    <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider mb-0.5">{label}</p>
+                    <p className="text-foreground font-medium break-words leading-snug">{value}</p>
                   </div>
                 ))}
               </div>
             )}
             {tags.length > 0 && (
-              <div className="mb-4 flex flex-wrap gap-1.5">
+              <div className="mb-4 flex flex-wrap gap-1.5 w-full">
                 {tags.map((tag, i) => (
-                  <span key={i} className="text-muted-foreground text-[10px] bg-secondary/10 px-2 py-0.5 rounded">{tag}</span>
+                  <span key={i} className="text-muted-foreground text-[10px] bg-secondary/10 px-2 py-0.5 rounded max-w-full break-words truncate" title={tag}>{tag}</span>
                 ))}
               </div>
             )}
-            <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-border">
+            <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-border w-full">
               {[
                 { action: () => toggleAsync('/api/users/saved-hikes', isFavorite, setIsFavorite), active: isFavorite, icon: Heart, label: isFavorite ? 'Saved' : 'Save', activeClass: 'bg-primary text-white' },
                 { action: () => toggleAsync('/api/users/completed-hikes', isCompleted, setIsCompleted), active: isCompleted, icon: CheckCircle, label: isCompleted ? 'Completed' : 'Mark Complete', activeClass: 'bg-green-600 text-white' },
                 { action: () => mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), active: true, icon: Navigation, label: 'View Map', activeClass: 'bg-accent text-white hover:bg-accent/90' },
               ].map(({ action, active, icon: Icon, label, activeClass }, i) => (
                 <button key={i} onClick={action}
-                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all ${i < 2 ? (active ? activeClass : 'bg-white border border-border hover:bg-gray-50') : activeClass}`}>
-                  <Icon className={`w-3.5 h-3.5 ${i < 2 && active ? 'fill-current' : ''}`} /> {label}
+                  className={`flex-1 overflow-hidden flex-nowrap shrink-0 py-2 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all ${i < 2 ? (active ? activeClass : 'bg-white border border-border hover:bg-gray-50') : activeClass}`}>
+                  <Icon className={`w-3.5 h-3.5 shrink-0 ${i < 2 && active ? 'fill-current' : ''}`} /> <span className="truncate">{label}</span>
                 </button>
               ))}
             </div>
@@ -327,29 +348,29 @@ const TrailDetails = () => {
         </section>
 
         {/* Stats */}
-        <section className="bg-white rounded-xl shadow-sm border border-border p-4 mb-5">
+        <section className="bg-white rounded-xl shadow-sm border border-border p-4 mb-5 w-full">
           <h2 className="text-foreground text-base font-bold mb-3">Trail Details</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 w-full">
             {stats.map((s, i) => <StatItem key={i} {...s} />)}
           </div>
         </section>
 
-        {/* Permits */}
-        {trail.permits_required?.length > 0 && (
-          <section className="bg-white rounded-xl shadow-sm border border-border p-4 mb-5">
-            <h2 className="text-foreground text-base font-bold mb-3">Permits & Fees</h2>
-            <div className="flex flex-col gap-3">
-              {trail.permits_required.map((p, i) => <PermitCard key={i} permit={p} />)}
-            </div>
-          </section>
-        )}
-
         {/* Description & Gallery */}
-        <section className="bg-white rounded-xl shadow-sm border border-border p-4 mb-5">
+        <section className="bg-white rounded-xl shadow-sm border border-border p-4 mb-5 w-full">
           <h2 className="text-foreground text-base font-bold mb-2">About this Trail</h2>
-          <p className="text-muted-foreground leading-relaxed text-xs sm:text-sm mb-4">
+          <p className="text-muted-foreground leading-relaxed text-xs sm:text-sm mb-6 break-words">
             {trail.description || 'No description available.'}
           </p>
+
+          {trail.permits_required?.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-foreground text-sm font-semibold mb-3 flex items-center gap-1.5"><DollarSign className="w-4 h-4 text-primary" /> Permits & Fees</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {trail.permits_required.map((p, i) => <PermitCard key={i} permit={p} />)}
+              </div>
+            </div>
+          )}
+
           {galleryImages.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -371,61 +392,62 @@ const TrailDetails = () => {
           )}
         </section>
 
-        {/* Map & Elevation */}
-        <section ref={mapSectionRef} className="bg-white rounded-xl shadow-sm border border-border p-4 mb-5">
-          <div className="flex flex-col lg:flex-row gap-4 h-[500px] lg:h-[420px]">
-            <div className="flex-1 h-full min-h-[250px] rounded-lg overflow-hidden border border-border relative z-0">
-              <TrailMap geoJson={trail.geoJson} startLocation={trail.location} />
-            </div>
-            <div className="lg:w-1/3 flex flex-col min-h-[200px]"> {/* Added min-h for mobile stability */}
-              <div className="h-full bg-gray-50 rounded-lg p-2.5 border border-border flex flex-col">
-                <h3 className="text-xs font-bold text-foreground mb-1.5 flex items-center gap-1.5">
-                  <TrendingUp className="w-3.5 h-3.5 text-primary" /> Elevation Profile
-                </h3>
-                <div className="flex-1 w-full min-h-0 overflow-hidden"> {/* Added overflow-hidden */}
-                  <ElevationChart geoJson={trail.geoJson} trailData={trail} />
-                </div>
-              </div>
-            </div>
+        {/* Full-width Map */}
+        <section ref={mapSectionRef} className="bg-white rounded-xl shadow-sm border border-border mb-5 w-full overflow-hidden">
+          <div className="px-4 pt-3 pb-0 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-foreground truncate">Trail Map &amp; POIs</h2>
+          </div>
+          <div className="h-[480px] w-full relative mt-2 shrink-0">
+            <TrailMap geoJson={trail.geoJson} startLocation={trail.location} />
+          </div>
+        </section>
+
+        {/* Elevation Profile — below map */}
+        <section className="bg-white rounded-xl shadow-sm border border-border p-4 mb-5 w-full overflow-hidden">
+          <h3 className="text-xs font-bold text-foreground mb-2 flex items-center gap-1.5 truncate">
+            <TrendingUp className="w-3.5 h-3.5 text-primary shrink-0" /> Elevation Profile
+          </h3>
+          <div className="h-[350px] min-h-[350px] w-full">
+            <ElevationChart geoJson={trail.geoJson} trailData={trail} />
           </div>
         </section>
 
         {/* Weather */}
-        <section className="bg-white rounded-xl shadow-sm border border-border p-4 mb-5">
+        <section className="bg-white rounded-xl shadow-sm border border-border p-4 mb-5 w-full">
           <WeatherForecast lat={trail.latitude || 27.7172} lng={trail.longitude || 85.3240} />
         </section>
 
         {/* Itinerary */}
-        <section className="bg-white rounded-xl shadow-sm border border-border p-4 mb-5">
+        <section className="bg-white rounded-xl shadow-sm border border-border p-4 mb-5 w-full">
           <h2 className="text-foreground text-base font-bold mb-3">Itinerary</h2>
           <div className="space-y-2">
             {itinerary.length > 0 ? itinerary.map((item, i) => (
-              <div key={i} className="flex gap-2.5 p-2.5 bg-gray-50 rounded-lg border-l-2 border-primary">
+              <div key={i} className="flex gap-2.5 p-2.5 bg-gray-50 rounded-lg border-l-2 border-primary min-w-0">
                 <div className="shrink-0 w-5 h-5 bg-primary text-white rounded-full flex items-center justify-center font-bold text-[10px]">{i + 1}</div>
-                <div className="flex-1">
-                  {item.day && <p className="text-foreground text-xs font-semibold">{item.day}</p>}
-                  {item.description && <p className="text-foreground text-xs pt-0.5">{item.description}</p>}
+                <div className="flex-1 min-w-0">
+                  {item.day && <p className="text-foreground text-xs font-semibold break-words">{item.day}</p>}
+                  {item.description && <p className="text-foreground text-xs pt-0.5 break-words">{item.description}</p>}
                   {item.points?.length > 0 && (
                     <ul className="text-muted-foreground text-[10px] mt-1.5 space-y-0.5 ml-3">
-                      {item.points.map((pt, j) => <li key={j} className="list-disc">{pt}</li>)}
+                      {item.points.map((pt, j) => <li key={j} className="list-disc break-words">{pt}</li>)}
                     </ul>
                   )}
                 </div>
               </div>
-            )) : <p className="text-muted-foreground text-xs italic">Itinerary not available.</p>}
+            )) : <p className="text-muted-foreground text-xs italic truncate">Itinerary not available.</p>}
           </div>
         </section>
 
         {/* Reviews */}
-        <section className="bg-white rounded-xl shadow-sm border border-border p-4 mb-5">
-          <h2 className="text-foreground text-base font-bold mb-3">Reviews ({reviews.length})</h2>
+        <section className="bg-white rounded-xl shadow-sm border border-border p-4 mb-5 w-full">
+          <h2 className="text-foreground text-base font-bold mb-3 truncate">Reviews ({reviews.length})</h2>
 
           {user ? (
             <div className="mb-4 bg-gray-50 p-3 rounded-lg border border-border">
-              <h3 className="text-xs font-semibold mb-2">Write a Review</h3>
+              <h3 className="text-xs font-semibold mb-2 truncate">Write a Review</h3>
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-muted-foreground">Rating:</span>
+                  <span className="text-[10px] text-muted-foreground truncate">Rating:</span>
                   {[1, 2, 3, 4, 5].map((s) => (
                     <button key={s} onClick={() => setNewReview((p) => ({ ...p, rating: s }))} className="focus:outline-none hover:scale-110 transition-transform">
                       <Star className={`w-5 h-5 ${s <= newReview.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'}`} />
@@ -443,7 +465,7 @@ const TrailDetails = () => {
               </div>
             </div>
           ) : (
-            <div className="mb-4 p-3 bg-blue-50 text-blue-700 rounded-lg text-xs">
+            <div className="mb-4 p-3 bg-blue-50 text-blue-700 rounded-lg text-xs break-words">
               Please <button onClick={() => navigate('/login')} className="font-bold hover:underline">login</button> to leave a review.
             </div>
           )}
@@ -455,21 +477,21 @@ const TrailDetails = () => {
           ) : (
             <div className="space-y-2">
               {reviews.map((r, i) => (
-                <div key={r.id || i} className="p-3 bg-gray-50 rounded-lg">
+                <div key={r.id || i} className="p-3 bg-gray-50 rounded-lg min-w-0">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <div className="w-7 h-7 bg-primary/10 rounded-full flex items-center justify-center overflow-hidden">
+                    <div className="w-7 h-7 bg-primary/10 rounded-full flex items-center justify-center overflow-hidden shrink-0">
                       {r.userImage ? <Img src={r.userImage} alt={r.userName} /> : <User className="w-3.5 h-3.5 text-primary" />}
                     </div>
-                    <div>
-                      <p className="text-foreground text-xs font-semibold">{r.userName || 'User'}</p>
+                    <div className="min-w-0">
+                      <p className="text-foreground text-xs font-semibold truncate">{r.userName || 'User'}</p>
                       <div className="flex items-center gap-0.5">
-                        <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                        <span className="text-[10px] font-medium">{r.rating}</span>
+                        <Star className="w-3 h-3 text-yellow-500 fill-yellow-500 shrink-0" />
+                        <span className="text-[10px] font-medium shrink-0">{r.rating}</span>
                       </div>
                     </div>
-                    <span className="ml-auto text-[10px] text-muted-foreground">{new Date(r.createdAt).toLocaleDateString()}</span>
+                    <span className="ml-auto text-[10px] text-muted-foreground shrink-0">{new Date(r.createdAt).toLocaleDateString()}</span>
                   </div>
-                  <p className="text-foreground/80 text-xs">{r.comment}</p>
+                  <p className="text-foreground/80 text-xs break-words">{r.comment}</p>
                 </div>
               ))}
             </div>
