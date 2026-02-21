@@ -63,39 +63,42 @@ const TrailImageSchema = new mongoose.Schema({
 });
 
 /* ==============================
-   TRAIL GEOJSON
+   TRAIL GEOJSON (Updated for Elevation)
    ============================== */
 
-// Matches exactly what's in your data:
-// properties: { trailId, name, distanceKm } — nothing else
 const SegmentPropertiesSchema = new mongoose.Schema({
-  trailId: { type: String },            // "R0001 (Kathmandu Valley circuit)"
-  name: { type: String },            // "Sundarijal to Jarsingpauwa"
-  distanceKm: { type: Number, default: 0 } // 19.002
+  trailId: { type: String },
+  name: { type: String },
+  distanceKm: { type: Number, default: 0 }
 }, { _id: false });
-// No strict:false — your data is clean and consistent
 
-// Only LineStrings in your data — no Points, no Polygons
 const SegmentSchema = new mongoose.Schema({
   type: { type: String, default: "Feature" },
   geometry: {
     type: {
       type: String,
-      enum: ["LineString"], // ✅ locked — only LineStrings exist in your data
+      enum: ["LineString"],
       required: true
     },
-    coordinates: { type: [[Number]], required: true } // [[lng, lat], ...] — 262 points after compression
+    // Updated to support [lng, lat, elevation]
+    coordinates: { type: [[Number]], required: true }
   },
   properties: { type: SegmentPropertiesSchema, default: () => ({}) }
 }, { _id: false });
 
 const TrailGeoJSONSchema = new mongoose.Schema({
-  trailId: { type: String, required: true, unique: true }, // "R0001"
-  trailName: { type: String, required: true },               // "Kathmandu Valley circuit"
-  totalDistanceKm: { type: Number, required: true, min: 0 },       // 173.335
-  features: { type: [SegmentSchema], required: true, default: [] } // Array of segments
+  trailId: { type: String, required: true, unique: true },
+  trailName: { type: String, required: true },
+  totalDistanceKm: { type: Number, required: true, min: 0 },
+
+  // --- NEW ELEVATION FIELDS ---
+  totalAscent: { type: Number, default: 0 },   // Total meters climbed
+  totalDescent: { type: Number, default: 0 },  // Total meters descended
+  // -----------------------------
+
+  features: { type: [SegmentSchema], required: true, default: [] }
 }, {
-  collection: "Trail_GeoJSON_compressed",
+  collection: "Trail_GeoJSON_compressedE", // Updated to the enriched collection
   timestamps: true
 });
 
@@ -109,4 +112,6 @@ TrailGeoJSONSchema.index(
    ============================== */
 export const Trail = mongoose.model("Trail", TrailSchema);
 export const TrailImage = mongoose.model("TrailImage", TrailImageSchema);
+
+// Explicitly connecting to auth_db for the GeoJSON data
 export const TrailGeoJSON = mongoose.connection.useDb("auth_db").model("TrailGeoJSON", TrailGeoJSONSchema);
