@@ -207,7 +207,7 @@ const HomePage = ({ userName = "Traveler" }) => {
       {/* Hero Section */}
       <div className="relative h-[250px] sm:h-80 lg:h-[380px] overflow-hidden">
         <ImageWithFallback
-          src="https://images.unsplash.com/photo-1542815965-ea7e5ad4269c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxuZXBhbCUyMHByYXllciUyMGZsYWdzfGVufDF8fHx8MTc2NTAwMDg2M3ww&ixlib=rb-4.1.0&q=80&w=1080"
+          src="https://res.cloudinary.com/dfrczxa2p/image/upload/v1771570882/trails/R0055/zzj7hkfs1dpi9aicscwi.jpg"
           alt="Nepal Mountains"
           className="w-full h-full object-cover"
         />
