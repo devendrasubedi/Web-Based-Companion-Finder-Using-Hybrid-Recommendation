@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import React, { useMemo } from "react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Label } from "recharts";
+import { TrendingUp } from "lucide-react";
 
-// Haversine distance between two [lng, lat] points in km
+// ... haversine function stays the same ...
 const haversine = (a, b) => {
     const toRad = d => d * Math.PI / 180;
     const R = 6371;
@@ -11,259 +12,146 @@ const haversine = (a, b) => {
     return R * 2 * Math.atan2(Math.sqrt(sin2), Math.sqrt(1 - sin2));
 };
 
-const SEGMENT_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2'];
+export default function ElevationChart({ geoJson }) {
+    const { chartData, stats, locations } = useMemo(() => {
+        if (!geoJson || !geoJson.features) return { chartData: [], stats: null, locations: null };
 
-const ElevationChart = ({ geoJson, trailData }) => {
-
-    // Compute segment boundaries (cumulative distance at each segment end)
-    const segmentMarkers = useMemo(() => {
-        const features = geoJson?.features || [];
-        if (features.length <= 1) return [];
-
-        const markers = [];
-        let cumDist = 0;
-
-        features.forEach((f, idx) => {
-            if (f.geometry?.type !== 'LineString' || !f.geometry.coordinates) return;
-            const coords = f.geometry.coordinates;
-            // Add distance for this segment
-            for (let i = 1; i < coords.length; i++) {
-                cumDist += haversine(coords[i - 1], coords[i]);
-            }
-            // Mark boundary at end of each segment (except the last)
-            if (idx < features.length - 1) {
-                markers.push({
-                    distance: cumDist,
-                    letter: String.fromCharCode(65 + idx),
-                    name: f.properties?.name || `Segment ${idx + 1}`,
-                    color: SEGMENT_COLORS[idx % SEGMENT_COLORS.length]
-                });
-            }
+        const features = geoJson.features;
+        let allCoords = [];
+        features.forEach(f => {
+            if (f.geometry?.coordinates) allCoords = allCoords.concat(f.geometry.coordinates);
         });
 
-        // Scale to totalDistanceKm if available
-        const totalKm = geoJson?.totalDistanceKm;
-        if (totalKm && cumDist > 0) {
-            const scale = totalKm / cumDist;
-            markers.forEach(m => { m.distance *= scale; });
-        }
+        if (allCoords.length === 0) return { chartData: [], stats: null, locations: null };
 
-        return markers;
-    }, [geoJson]);
+        // Extract Names
+        const firstSegmentName = features[0]?.properties?.name || "";
+        const lastSegmentName = features[features.length - 1]?.properties?.name || "";
+        const startLoc = firstSegmentName.split(/ to /i)[0] || "Start";
+        const endLoc = lastSegmentName.split(/ to /i)[1] || lastSegmentName.split(/ to /i)[0] || "End";
 
-    // Extract elevation data from GeoJSON or use mock data based on trail stats
-    const getElevationData = () => {
-        let coords = [];
+        // Sampling
+        const step = Math.max(1, Math.floor(allCoords.length / 500));
+        const sampled = allCoords.filter((_, i) => i % step === 0);
 
-        // 1. Try to get coordinates from features array (compressed schema)
-        if (geoJson?.features) {
-            geoJson.features.forEach(f => {
-                if (f.geometry?.type === 'LineString' && f.geometry.coordinates) {
-                    coords = coords.concat(f.geometry.coordinates);
-                }
-            });
-        }
-        // 2. Fallback to simple route object
-        else if (geoJson?.route?.coordinates?.length > 0) {
-            coords = geoJson.route.coordinates;
-        }
+        let cumDist = 0;
+        let calcGain = 0, calcLoss = 0;
+        let min = sampled[0][2], max = sampled[0][2];
 
-        // If we found coordinates, process them
-        if (coords.length > 0) {
-            const hasElevation = coords[0].length > 2;
-
-            // Compute cumulative Haversine distance for all coords
-            let cumDist = 0;
-            const distances = coords.map((point, i) => {
-                if (i > 0) cumDist += haversine(coords[i - 1], point);
-                return cumDist;
-            });
-
-            // Scale to totalDistanceKm if available
-            const totalKm = geoJson?.totalDistanceKm;
-            if (totalKm && cumDist > 0) {
-                const scale = totalKm / cumDist;
-                distances.forEach((_, i) => { distances[i] *= scale; });
-                cumDist = totalKm;
+        const data = sampled.map((p, i) => {
+            const ele = p[2] || 0;
+            if (i > 0) {
+                cumDist += haversine(sampled[i - 1], p);
+                const diff = ele - sampled[i - 1][2];
+                if (diff > 0) calcGain += diff;
+                else calcLoss += Math.abs(diff);
             }
+            if (ele < min) min = ele;
+            if (ele > max) max = ele;
 
-            if (hasElevation) {
-                // Real elevation data available
-                const data = coords.map((point, i) => ({
-                    distance: distances[i],
-                    elevation: point[2]
-                }));
-                // Sample down if too many points
-                if (data.length > 500) {
-                    const step = Math.ceil(data.length / 500);
-                    return data.filter((_, i) => i % step === 0 || i === data.length - 1);
-                }
-                return data;
-            }
-
-            // No elevation in coords — generate realistic profile from trail metadata + actual distances
-            const minAlt = trailData?.altitude?.min_m || 1000;
-            const maxAlt = trailData?.altitude?.max_m || 3000;
-            const range = maxAlt - minAlt;
-
-            // Sample ~100 points along the actual trail distance
-            const numPoints = Math.min(coords.length, 100);
-            const step = Math.max(1, Math.floor(coords.length / numPoints));
-            const data = [];
-
-            for (let i = 0; i < coords.length; i += step) {
-                const progress = distances[i] / cumDist;
-                const wave1 = Math.sin(progress * Math.PI);
-                const wave2 = Math.sin(progress * Math.PI * 3) * 0.15;
-                const wave3 = Math.sin(progress * Math.PI * 7 + 1.2) * 0.08;
-                const wave4 = Math.sin(progress * Math.PI * 13 + 0.5) * 0.04;
-                const combined = Math.max(0, Math.min(1, wave1 + wave2 + wave3 + wave4));
-                data.push({
-                    distance: distances[i],
-                    elevation: Math.round(minAlt + range * combined)
-                });
-            }
-            if (data.length > 0 && data[data.length - 1].distance < cumDist) {
-                data.push({ distance: cumDist, elevation: Math.round(minAlt + range * 0.05) });
-            }
-            return data;
-        }
-
-        // 3. Final fallback: no coordinates at all — use metadata only
-        const minAlt = trailData?.altitude?.min_m || 1000;
-        const maxAlt = trailData?.altitude?.max_m || 3000;
-        const totalDist = trailData?.distance?.value || geoJson?.totalDistanceKm || 10;
-        const points = 30;
-        const data = [];
-
-        for (let i = 0; i <= points; i++) {
-            const progress = i / points;
-            const wave = Math.sin(progress * Math.PI) + Math.sin(progress * Math.PI * 3) * 0.12;
-            const elevation = minAlt + (maxAlt - minAlt) * Math.max(0, wave);
-            data.push({
-                distance: totalDist * progress,
-                elevation: Math.round(elevation)
-            });
-        }
-        return data;
-    };
-
-    const data = getElevationData();
-
-    // Calculate Gain and Loss
-    const stats = useMemo(() => {
-        if (!data || data.length < 2) return { gain: 0, loss: 0 };
-
-        let gain = 0;
-        let loss = 0;
-
-        for (let i = 1; i < data.length; i++) {
-            const diff = data[i].elevation - data[i - 1].elevation;
-            if (diff > 0) gain += diff;
-            else loss += Math.abs(diff);
-        }
+            return { distance: parseFloat(cumDist.toFixed(2)), elevation: ele };
+        });
 
         return {
-            gain: Math.round(gain),
-            loss: Math.round(loss)
+            chartData: data,
+            locations: { start: startLoc, end: endLoc },
+            stats: {
+                gain: geoJson.totalAscent || Math.round(calcGain),
+                loss: geoJson.totalDescent || Math.round(calcLoss),
+                distance: Math.round(geoJson.totalDistanceKm || cumDist),
+                peak: Math.round(max),
+                lowest: Math.round(min)
+            }
         };
-    }, [data]);
+    }, [geoJson]);
 
-    // Start/End names from trail location
-    const startName = trailData?.location?.start || 'Start';
-    const endName = trailData?.location?.end || 'End';
+    if (!chartData.length) return null;
 
-    if (!data || data.length === 0) {
-        return <div className="p-4 text-center text-muted-foreground">Elevation data not available</div>;
-    }
+    const maxDist = chartData[chartData.length - 1].distance;
 
     return (
-        <div className="w-full h-full flex flex-col">
-            <div className="flex flex-wrap gap-3 mb-2 text-xs font-medium text-muted-foreground">
-                <div className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    Gain: <span className="text-foreground">{stats.gain}m</span>
-                </div>
-                <div className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                    Loss: <span className="text-foreground">{stats.loss}m</span>
-                </div>
-                <div className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                    Max: <span className="text-foreground">{Math.max(...data.map(d => d.elevation))}m</span>
-                </div>
+        <div className="w-full flex flex-col h-full bg-white font-sans">
+            {/* Stats Summary */}
+            <div className="flex justify-between md:justify-start md:gap-8 mb-4 bg-gray-50/50 p-3 rounded-lg border border-gray-100 px-4">
+                <StatBox label="Dist" value={`${stats.distance} km`} />
+                <StatBox label="Gain" value={`+${stats.gain} m`} color="text-green-600" />
+                <StatBox label="Loss" value={`-${stats.loss} m`} color="text-red-500" />
+                <StatBox label="Peak" value={`${stats.peak} m`} />
+                <StatBox label="Low" value={`${stats.lowest} m`} />
             </div>
 
-            {/* Start/End location labels */}
-            <div className="flex justify-between mb-1 text-[10px] font-semibold text-muted-foreground px-9">
-                <span title={startName}>🚩 {startName}</span>
-                <span title={endName}>{endName} 🏁</span>
-            </div>
+            <div className="flex-1 w-full relative min-h-[150px]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={10} minHeight={10}>
+                    <AreaChart data={chartData} margin={{ top: 25, right: 35, left: 10, bottom: 20 }}>
+                        <defs>
+                            <linearGradient id="eleGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#556B2F" stopOpacity={0.15} />
+                                <stop offset="95%" stopColor="#556B2F" stopOpacity={0} />
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
 
-            <div className="flex-1 min-h-0" style={{ minHeight: '60px' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                        data={data}
-                        margin={{
-                            top: 15,
-                            right: 10,
-                            left: 0,
-                            bottom: 0,
-                        }}
-                    >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis
                             dataKey="distance"
-                            tickFormatter={(val) => `${val.toFixed(0)}km`}
-                            tick={{ fontSize: 10 }}
-                            axisLine={false}
+                            fontSize={10}
+                            tickFormatter={v => `${Math.round(v)}k`}
+                            axisLine={{ stroke: '#e5e7eb' }}
                             tickLine={false}
-                        />
+                            tick={{ fill: '#6b7280' }}
+                            dy={10}
+                            minTickGap={25}
+                        >
+                            <Label value="Distance (km)" offset={-15} position="insideBottom" fontSize={10} fill="#6b7280" />
+                        </XAxis>
                         <YAxis
-                            tickFormatter={(val) => `${val}m`}
-                            tick={{ fontSize: 10 }}
+                            fontSize={10}
+                            domain={['dataMin - 50', 'dataMax + 50']}
                             axisLine={false}
                             tickLine={false}
-                            domain={['auto', 'auto']}
-                            width={35}
-                        />
-                        <Tooltip
-                            formatter={(value) => [`${value}m`, 'Elevation']}
-                            labelFormatter={(label) => `Distance: ${Number(label).toFixed(1)}km`}
-                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '12px' }}
-                        />
+                            tick={{ fill: '#6b7280' }}
+                            width={45}
+                            tickFormatter={v => `${v}m`}
+                        >
+                            <Label value="Elevation (m)" angle={-90} position="insideLeft" style={{ textAnchor: 'middle' }} fontSize={10} fill="#6b7280" offset={-5} />
+                        </YAxis>
 
-                        {/* Segment boundary markers (A, B, C…) */}
-                        {segmentMarkers.map((marker) => (
-                            <ReferenceLine
-                                key={marker.letter}
-                                x={marker.distance}
-                                stroke={marker.color}
-                                strokeDasharray="4 3"
-                                strokeWidth={1.5}
-                                label={{
-                                    value: marker.letter,
-                                    position: 'top',
-                                    fill: marker.color,
-                                    fontSize: 11,
-                                    fontWeight: 'bold',
-                                }}
-                            />
-                        ))}
+                        <Tooltip content={<CustomTooltip />} />
 
                         <Area
                             type="monotone"
                             dataKey="elevation"
-                            stroke="#16a34a"
-                            fill="#dcfce7"
+                            stroke="#556B2F"
                             strokeWidth={2}
+                            fill="url(#eleGradient)"
+                            isAnimationActive={false}
                         />
                     </AreaChart>
                 </ResponsiveContainer>
             </div>
         </div>
     );
+}
+
+// Helper components...
+function StatBox({ label, value, color = "text-foreground" }) {
+    return (
+        <div className="flex flex-col items-center">
+            <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider mb-0.5">{label}</span>
+            <span className={`text-xs font-bold ${color}`}>{value}</span>
+        </div>
+    );
+}
+
+const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-white/95 backdrop-blur-sm border border-border p-3 rounded-lg shadow-lg text-xs">
+                <p className="text-muted-foreground mb-1"><span className="font-semibold text-foreground">{Math.round(label)}</span> km mark</p>
+                <p className="text-primary font-bold flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3" /> {payload[0].value} m elevation
+                </p>
+            </div>
+        );
+    }
+    return null;
 };
-
-export default ElevationChart;
-
