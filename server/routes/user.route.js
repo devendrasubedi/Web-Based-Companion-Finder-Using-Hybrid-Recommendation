@@ -1,13 +1,21 @@
 import express from "express";
-import { getAllUsers, getUserProfile, toggleSavedHike, toggleCompletedHike } from "../controllers/user.controller.js";
+import {
+    getAllUsers,
+    getUserProfile,
+    toggleSavedHike,
+    toggleCompletedHike,
+    getUserInteractions,
+    getPublicUserInteractions
+} from "../controllers/user.controller.js";
 import { verifyToken } from "../middleware/verifyToken.js";
 
 const router = express.Router();
 
-console.log('Setting up user routes - getAllUsers:', typeof getAllUsers, 'getUserProfile:', typeof getUserProfile);
-
 // Get all users (for homepage cards)
 router.get("/", getAllUsers);
+
+// Get own interactions (saved + completed hikes)
+router.get("/interactions", verifyToken, getUserInteractions);
 
 // Toggle saved hike
 router.post("/saved-hikes", verifyToken, toggleSavedHike);
@@ -15,14 +23,8 @@ router.post("/saved-hikes", verifyToken, toggleSavedHike);
 // Toggle completed hike
 router.post("/completed-hikes", verifyToken, toggleCompletedHike);
 
-// Get specific user profile
+// Get specific user profile (public)
+router.get("/:id/interactions", getPublicUserInteractions);
 router.get("/:id", getUserProfile);
-// Note: We might want verifyToken if profile is private, but usually profiles are public or semi-public.
-// Keeping it open for now or we can add verifyToken if strictly private. 
-// Given the social aspect (finding partners), likely public/protected. 
-// I'll leave it open for reading for now, or maybe just verifyToken? 
-// The user said "view even others", implying some access.
-// Let's protect it so only logged-in users can view others?
-// router.get("/:id", verifyToken, getUserProfile); 
 
 export default router;
