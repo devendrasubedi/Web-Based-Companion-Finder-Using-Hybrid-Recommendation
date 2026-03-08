@@ -89,11 +89,14 @@ export const verifyEmail = async (req, res) => {
         user.verificationTokenExpiresAt = undefined;
         await user.save();
 
+        const userProfile = await UserProfile.findOne({ userId: user._id });
+
         await sendWelcomeEmail(user.email, user.name)
         res.status(200).json({
             success: true,
             message: "email verified sucessfully",
             user: {
+                ...(userProfile ? userProfile._doc : {}),
                 ...user._doc,
                 password: undefined,
             }
@@ -215,8 +218,9 @@ export const checkAuth = async (req, res) => {
         res.status(200).json({
             sucess: true,
             user: {
-                ...userProfile?._doc,
+                ...(userProfile ? userProfile._doc : {}),
                 ...user._doc,
+                password: undefined,
             }
         })
     } catch (error) {

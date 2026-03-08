@@ -11,10 +11,17 @@ const UserTrailInteractionSchema = new mongoose.Schema({
         ref: "Trail",
         required: true
     },
-    interactionType: {
-        type: String,
-        enum: ["save", "complete", "rate"],
-        required: true
+    isSaved: {
+        type: Boolean,
+        default: false
+    },
+    isCompleted: {
+        type: Boolean,
+        default: false
+    },
+    completedAt: {
+        type: Date,
+        default: null
     },
     rating: {
         type: Number,
@@ -22,24 +29,24 @@ const UserTrailInteractionSchema = new mongoose.Schema({
         max: 5,
         default: null
     },
+    implicitScore: {
+        type: Number,
+        default: 0
+    },
     source: {
         type: String,
         enum: ["search", "recommendation", "browse", "shared", "unknown"],
         default: "unknown"
-    },
-    timestamp: {
-        type: Date,
-        default: Date.now
     }
 }, {
     collection: "User_Trail_Interactions",
     timestamps: true
 });
 
-UserTrailInteractionSchema.index({ userId: 1, trailId: 1 });
+UserTrailInteractionSchema.index({ userId: 1, trailId: 1 }, { unique: true });
+UserTrailInteractionSchema.index({ userId: 1, isSaved: 1 });
+UserTrailInteractionSchema.index({ userId: 1, isCompleted: 1 });
 UserTrailInteractionSchema.index({ trailId: 1 });
-UserTrailInteractionSchema.index({ interactionType: 1 });
-UserTrailInteractionSchema.index({ timestamp: -1 });
 
 const interactionDb = mongoose.connection.useDb("auth_db");
 export const UserTrailInteraction = interactionDb.model(
