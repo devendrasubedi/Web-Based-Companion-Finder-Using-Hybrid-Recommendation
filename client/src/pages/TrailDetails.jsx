@@ -164,11 +164,17 @@ const TrailDetails = () => {
     return () => { cancelled = true; };
   }, [id]);
 
-  // Sync favorite & completed state from user profile
+  // Sync favorite & completed state from InteractionAggregate via API
   useEffect(() => {
     if (!user || !id) return;
-    setIsFavorite(checkUserList(user.savedHikes, id));
-    setIsCompleted(checkUserList(user.pastHikes, id));
+    axios.get('/api/users/interactions')
+      .then(({ data }) => {
+        if (data.success) {
+          setIsFavorite(data.savedHikes?.some(h => String(h.trailId) === String(id)) ?? false);
+          setIsCompleted(data.pastHikes?.some(h => String(h.trailId) === String(id)) ?? false);
+        }
+      })
+      .catch(() => {});
   }, [user, id]);
 
   const toggleAsync = useCallback(async (endpoint, state, setState) => {
@@ -267,8 +273,10 @@ const TrailDetails = () => {
 
   const stats = [
     { icon: Calendar, label: 'Duration', value: formatValue(trail.duration, (d) => `${d.min_days || 0}–${d.max_days || 0} days`) || trail.duration || 'N/A' },
-    trail.distance && { icon: Ruler, label: 'Distance', value: formatValue(trail.distance, (d) => `${d.value || d.min_km || 0} ${d.unit || 'km'}`) || `${trail.distance} km` },
-    trail.altitude && { icon: TrendingUp, label: 'Max Altitude', value: formatValue(trail.altitude, (a) => `${a.max_m?.toLocaleString() || 'N/A'} m`) || `${trail.altitude.toLocaleString()} m` },
+    trail.distance_km != null && { icon: Ruler, label: 'Distance', value: `${trail.distance_km} km` },
+    trail.altitude?.max_m != null && { icon: TrendingUp, label: 'Max Altitude', value: `${trail.altitude.max_m.toLocaleString()} m` },
+    trail.geoJson?.totalAscent > 0 && { icon: TrendingUp, label: 'Total Ascent', value: `${trail.geoJson.totalAscent.toLocaleString()} m` },
+    trail.geoJson?.totalDescent > 0 && { icon: TrendingUp, label: 'Total Descent', value: `${trail.geoJson.totalDescent.toLocaleString()} m` },
     trail.cost && { icon: DollarSign, label: 'Est. Cost', value: formatValue(trail.cost, (c) => `${c.min_npr || 0}–${c.max_npr || 0} NPR`) || `NPR ${trail.cost}` },
     trail.accommodationType && { icon: Home, label: 'Accommodation', value: trail.accommodationType },
   ].filter(Boolean);
@@ -455,10 +463,10 @@ const TrailDetails = () => {
                   ))}
                 </div>
                 <textarea value={newReview.comment} onChange={(e) => setNewReview((p) => ({ ...p, comment: e.target.value }))}
-                  placeholder="Share your experience…"
+                  placeholder="Share your experience… (optional)"
                   className="w-full px-2.5 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary min-h-[60px]" />
                 <button onClick={handleReviewSubmit}
-                  disabled={isSubmittingReview || !newReview.comment.trim() || !newReview.rating}
+                  disabled={isSubmittingReview || !newReview.rating}
                   className="self-end px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">
                   {isSubmittingReview ? 'Posting…' : 'Post Review'}
                 </button>

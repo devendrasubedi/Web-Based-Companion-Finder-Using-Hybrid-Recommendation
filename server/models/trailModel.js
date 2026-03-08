@@ -2,6 +2,15 @@ import mongoose from "mongoose";
 
 /* ==============================
    TRAIL METADATA
+
+   CHANGES FROM ORIGINAL:
+     ~ distance: was { min_km, max_km } → now just distance_km (single accurate value)
+     + altitude.totalAscent   (computed from GeoJSON)
+     + altitude.totalDescent  (computed from GeoJSON)
+     + difficultyScore        (raw numeric score)
+     ~ difficulty             (enum validated, computed label)
+
+   ALL computed by: scripts/sync_trail_metrics.py
    ============================== */
 const PermitSchema = new mongoose.Schema({
   name: String,
@@ -19,7 +28,12 @@ const TrailSchema = new mongoose.Schema({
   _id: { type: String, required: true },
   name: { type: String, required: true, index: true },
   type: String,
-  difficulty: { type: String, index: true },
+  difficulty: {
+    type: String,
+    enum: ["Easy", "Moderate", "Difficult"],
+    index: true
+  },
+  difficultyScore: { type: Number, default: 0 },
   description: String,
   location: {
     provinces: [String],
@@ -28,9 +42,14 @@ const TrailSchema = new mongoose.Schema({
     end: String
   },
   duration: { min_days: Number, max_days: Number },
-  distance: { min_km: Number, max_km: Number },
+  distance_km: { type: Number, default: 0 },             // Was { min_km, max_km } → now single accurate value
   cost: { min_npr: Number, max_npr: Number },
-  altitude: { min_m: Number, max_m: Number },
+  altitude: {
+    min_m: Number,
+    max_m: Number,
+    totalAscent: { type: Number, default: 0 },
+    totalDescent: { type: Number, default: 0 }
+  },
   permits_required: [PermitSchema],
   tags: { type: [String], index: true },
   reviews: [{

@@ -21,7 +21,7 @@ const ProfileFriendRequests = ({ friendRequests, onAccept, onReject }) => {
                                 <div className="flex-1">
                                     <p className="text-foreground font-semibold">{request.name || "Unknown User"}</p>
                                     <p className="text-muted-foreground text-xs">
-                                        {new Date(request.receivedAt).toLocaleDateString()}
+                                        {request.sentAt ? new Date(request.sentAt).toLocaleDateString() : ''}
                                     </p>
                                 </div>
                             </div>
