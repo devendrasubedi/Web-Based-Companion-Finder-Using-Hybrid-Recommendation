@@ -89,16 +89,76 @@ const ExploreSearchPage = () => {
     fetchTrails();
   }, []);
 
+  // Log trail data structure when allTrails changes
+  useEffect(() => {
+    if (allTrails.length > 0) {
+      console.log('📊 Trail Data Structure Debug:');
+      console.log('Total trails loaded:', allTrails.length);
+      console.log('First trail structure:', {
+        name: allTrails[0].name,
+        location: allTrails[0].location,
+        location_provinces: allTrails[0].location?.provinces,
+        province_field: allTrails[0].province,
+        duration: allTrails[0].duration,
+        all_keys: Object.keys(allTrails[0])
+      });
+      
+      // Count trails by province
+      const provinceCount = {};
+      allTrails.forEach(t => {
+        if (t.location?.provinces && Array.isArray(t.location.provinces)) {
+          t.location.provinces.forEach(p => {
+            provinceCount[p] = (provinceCount[p] || 0) + 1;
+          });
+        }
+        if (t.province) {
+          const prov = String(t.province);
+          provinceCount[prov] = (provinceCount[prov] || 0) + 1;
+        }
+      });
+      console.log('📍 Trails per province:', provinceCount);
+      console.log('Total provinces found:', Object.keys(provinceCount).length);
+    }
+  }, [allTrails]);
+
+  // Map of locations to provinces for matching
+  const locationProvinceMap = {
+    'Solukhumbu': 'Koshi',
+    'Kaski': 'Gandaki',
+    'Rasuwa': 'Bagmati',
+    'Myagdi': 'Gandaki',
+    'Sankhuwasabha': 'Koshi',
+    'Ilam': 'Koshi',
+    'Gorkha': 'Gandaki',
+    'Dhading': 'Bagmati',
+    'Kathmandu': 'Bagmati',
+    'Taplejung': 'Koshi',
+    'Panchthar': 'Koshi',
+    'Gulmi': 'Gandaki',
+    'Palpa': 'Gandaki',
+    'Arghakhanchi': 'Lumbini',
+    'Nuwakot': 'Bagmati',
+    'Sindhuli': 'Bagmati',
+    'Makwanpur': 'Bagmati',
+    'Pokhari': 'Gandaki',
+    'Junbesi': 'Koshi',
+    'Nayapul': 'Gandaki',
+    'Ghandruk': 'Gandaki',
+    'Lukla': 'Koshi',
+    'Juphal': 'Karnali'
+  };
+
   // Normalize difficulty from API to match filter labels (Easy, Moderate, Challenging, Difficult)
   const normalizeDifficulty = (d) => {
     if (d == null) return '';
     const raw = String(d).trim();
     if (!raw || raw === '[object Object]') return '';
     const lower = raw.toLowerCase();
+    // Map all variations to standard labels
     if (lower === 'hard' || lower === 'difficult') return 'difficult';
-    if (lower === 'moderate' || lower === 'medium') return 'moderate';
-    if (lower === 'easy') return 'easy';
-    if (lower === 'challenging') return 'challenging';
+    if (lower === 'moderate' || lower === 'medium' || lower === 'intermediate') return 'moderate';
+    if (lower === 'easy' || lower === 'beginner' || lower === 'very easy') return 'easy';
+    if (lower === 'challenging' || lower === 'advanced' || lower === 'strenuous') return 'challenging';
     return lower;
   };
 
@@ -107,75 +167,185 @@ const ExploreSearchPage = () => {
     // Safety check - ensure trail exists
     if (!trail) return false;
 
-    // Search
+    // Search through name, location, and description
     const searchLower = searchQuery.toLowerCase();
+    const locationStr = trail.location && typeof trail.location === 'object' 
+      ? (trail.location.provinces?.join(' ') || '') + ' ' + (trail.location.districts?.join(' ') || '') + ' ' + (trail.location.start || '') + ' ' + (trail.location.end || '')
+      : String(trail.location || '');
     const matchesSearch = !searchQuery ||
       (trail.name && trail.name.toLowerCase().includes(searchLower)) ||
-      (trail.location && String(trail.location).toLowerCase().includes(searchLower)) ||
+      (locationStr && locationStr.toLowerCase().includes(searchLower)) ||
       (trail.description && trail.description.toLowerCase().includes(searchLower));
 
-    // Province - API now returns province; also check location string
+    // Province Filter - check location.provinces array from MongoDB
     let matchesProvince = selectedProvince === 'All';
     if (!matchesProvince) {
-      const trailProvince = (trail.province || '').trim();
-      const trailLocation = (trail.location || '').trim();
-      matchesProvince =
-        trailProvince === selectedProvince ||
-        trailLocation === selectedProvince ||
-        trailLocation.toLowerCase().includes(selectedProvince.toLowerCase()) ||
-        (trail.region && String(trail.region).includes(selectedProvince));
+      // Primary check: location.provinces array (from MongoDB trails_metadata collection)
+      if (trail.location && typeof trail.location === 'object' && Array.isArray(trail.location.provinces)) {
+        matchesProvince = trail.location.provinces.some(p => 
+          p && p.toLowerCase().trim() === selectedProvince.toLowerCase().trim()
+        );
+      }
+      // Fallback: direct province field (for sample/test data)
+      else if (trail.province && String(trail.province).toLowerCase().trim() === selectedProvince.toLowerCase().trim()) {
+        matchesProvince = true;
+      }
+      // Fallback: match location string against province map
+      else if (trail.location && typeof trail.location === 'string') {
+        const locationParts = trail.location.split('/').map(l => l.trim());
+        for (const part of locationParts) {
+          if (locationProvinceMap[part] === selectedProvince) {
+            matchesProvince = true;
+            break;
+          }
+        }
+      }
     }
 
     // Difficulty - normalize API values (hard -> difficult, etc.) to match filter
-    const trailDifficultyNorm = normalizeDifficulty(trail.difficulty);
-    const filterDifficultyNorm = (selectedDifficulty || '').toString().trim().toLowerCase();
-    const hasDifficulty = trail.difficulty != null && String(trail.difficulty).trim() !== '';
-    const matchesDifficulty =
-      selectedDifficulty === 'All' ||
-      (hasDifficulty && (trailDifficultyNorm === filterDifficultyNorm || (trail.difficulty && String(trail.difficulty).trim().toLowerCase() === filterDifficultyNorm)));
+    let matchesDifficulty = selectedDifficulty === 'All';
+    if (!matchesDifficulty && trail.difficulty) {
+      const trailDifficultyNorm = normalizeDifficulty(trail.difficulty);
+      const filterDifficultyNorm = normalizeDifficulty(selectedDifficulty);
+      const rawDifficulty = String(trail.difficulty).trim().toLowerCase();
+      
+      matchesDifficulty = (trailDifficultyNorm === filterDifficultyNorm) || (rawDifficulty === filterDifficultyNorm);
+    }
 
-    // Duration matching - if duration is missing or N/A, include trail in all duration filters
-    let matchesDays = true;
-    if (selectedDays !== 'All') {
-      const durationStr = trail.duration && String(trail.duration);
-      if (!durationStr || durationStr === 'N/A' || durationStr.toLowerCase().includes('n/a')) {
-        matchesDays = true; // unknown duration: show in any duration filter
+    // Duration matching - parse string format "X days" properly
+    let matchesDays = selectedDays === 'All';
+    if (!matchesDays && trail.duration) {
+      let daysNum = null;
+      
+      // Option 1: duration is an object with min_days (from MongoDB)
+      if (typeof trail.duration === 'object' && trail.duration.min_days != null) {
+        daysNum = trail.duration.min_days;
+      }
+      // Option 2: duration is a string like "10 days" 
+      else if (typeof trail.duration === 'string') {
+        // Extract first number from "X days" or "X-Y days" format
+        const match = trail.duration.match(/(\d+)/);
+        if (match) {
+          daysNum = parseInt(match[1], 10);
+        }
+      }
+      
+      // If we could parse days, apply day range filters
+      if (daysNum !== null) {
+        if (selectedDays === '1-5 days') matchesDays = daysNum >= 1 && daysNum <= 5;
+        else if (selectedDays === '5-10 days') matchesDays = daysNum > 5 && daysNum <= 10;
+        else if (selectedDays === '10-15 days') matchesDays = daysNum > 10 && daysNum <= 15;
+        else if (selectedDays === '15-20 days') matchesDays = daysNum > 15 && daysNum <= 20;
+        else if (selectedDays === '20+ days') matchesDays = daysNum > 20;
       } else {
-        const daysMatch = durationStr.match(/(\d+)/);
-        const days = daysMatch ? parseInt(daysMatch[1], 10) : 0;
-        if (selectedDays === '1-5 days') matchesDays = days >= 1 && days <= 5;
-        else if (selectedDays === '5-10 days') matchesDays = days > 5 && days <= 10;
-        else if (selectedDays === '10-15 days') matchesDays = days > 10 && days <= 15;
-        else if (selectedDays === '15-20 days') matchesDays = days > 15 && days <= 20;
-        else if (selectedDays === '20+ days') matchesDays = days > 20;
+        // If we couldn't parse days, include the trail anyway (don't exclude)
+        matchesDays = true;
       }
     }
 
-    // Budget - use cost_min/cost_max (NPR). If no cost, show trail for any budget filter.
-    let matchesBudget = true;
-    if (selectedBudget !== 'All') {
-      const costMin = trail.cost_min ?? trail.cost?.min_npr;
-      const costMax = trail.cost_max ?? trail.cost?.max_npr;
-      const price = typeof costMin === 'number' ? costMin : (typeof costMax === 'number' ? costMax : null);
-      if (price == null) {
-        matchesBudget = true; // no cost data: include in all budget filters
+    // Budget - categorize by cost and filter
+    let matchesBudget = selectedBudget === 'All';
+    if (!matchesBudget) {
+      let price = null;
+      
+      // Extract price from multiple possible sources
+      if (trail.cost && typeof trail.cost === 'object') {
+        // Use min_npr if available, otherwise max_npr
+        price = trail.cost.min_npr || trail.cost.max_npr;
+      } else if (trail.cost_min != null) {
+        price = trail.cost_min;
+      } else if (trail.costMin != null) {
+        price = trail.costMin;
+      }
+      
+      if (price != null) {
+        // Budget categories in NPR:
+        // Low: < 70k, Medium: 70k-150k, High: > 150k
+        if (selectedBudget === 'Low') {
+          matchesBudget = price < 70000;
+        } else if (selectedBudget === 'Medium') {
+          matchesBudget = price >= 70000 && price <= 150000;
+        } else if (selectedBudget === 'High') {
+          matchesBudget = price > 150000;
+        }
       } else {
-        // NPR ranges: Low < 50k, Medium 50k-150k, High > 150k
-        if (selectedBudget === 'Low') matchesBudget = price < 50000;
-        else if (selectedBudget === 'Medium') matchesBudget = price >= 50000 && price <= 150000;
-        else if (selectedBudget === 'High') matchesBudget = price > 150000;
+        // No cost data - include trail (be lenient)
+        matchesBudget = true;
       }
     }
 
-    return matchesSearch && matchesProvince && matchesDifficulty && matchesDays && matchesBudget;
+    const matches = matchesSearch && matchesProvince && matchesDifficulty && matchesDays && matchesBudget;
+    
+    // Debug: log first matching trail
+    if (matches && !window.__filteredTrailLogged) {
+      console.log('📍 First matching trail:', {
+        name: trail.name,
+        location: trail.location,
+        province_direct: trail.province,
+        duration: trail.duration,
+        cost: trail.cost,
+        difficulty: trail.difficulty
+      });
+      window.__filteredTrailLogged = true;
+    }
+
+    return matches;
   });
 
   // Debug logging
   useEffect(() => {
-    console.log('Filter state changed:', { selectedProvince, selectedDifficulty, selectedDays, selectedBudget });
-    console.log('All trails count:', allTrails.length);
-    console.log('Filtered trails count:', filteredTrails.length);
-  }, [selectedProvince, selectedDifficulty, selectedDays, selectedBudget, allTrails, filteredTrails]);
+    console.log('===== 🔍 FILTER DEBUG =====');
+    console.log('Active Filters:', {
+      province: selectedProvince !== 'All' ? selectedProvince : '(All)',
+      difficulty: selectedDifficulty !== 'All' ? selectedDifficulty : '(All)',
+      days: selectedDays !== 'All' ? selectedDays : '(All)',
+      budget: selectedBudget !== 'All' ? selectedBudget : '(All)',
+      search: searchQuery ? `"${searchQuery}"` : '(None)'
+    });
+    console.log(`Total trails: ${allTrails.length} | Filtered: ${filteredTrails.length}`);
+    
+    if (filteredTrails.length === 0 && allTrails.length > 0) {
+      console.log('\n⚠️ NO MATCHING TRAILS - Analyzing each trail:');
+      
+      allTrails.slice(0, 5).forEach((trail, idx) => {
+        const provinces = trail.location?.provinces || [];
+        const daysNum = typeof trail.duration === 'string' 
+          ? parseInt(trail.duration.match(/(\d+)/)?.[1] || 0) 
+          : (trail.duration?.min_days || 0);
+        const cost = trail.cost?.min_npr || trail.cost?.max_npr || trail.cost_min || null;
+        const difficulty = trail.difficulty || 'N/A';
+        
+        console.log(`\n📍 Trail ${idx}: ${trail.name}`);
+        console.log(`  Province: [${provinces.join(', ')}] vs filter: ${selectedProvince}`);
+        console.log(`  Difficulty: ${difficulty} vs filter: ${selectedDifficulty}`);
+        console.log(`  Duration: ${daysNum} days vs filter: ${selectedDays}`);
+        console.log(`  Budget: ${cost ? `₹${cost.toLocaleString()}` : 'N/A'} vs filter: ${selectedBudget}`);
+        
+        // Check each filter individually
+        const matchProvince = selectedProvince === 'All' || provinces.some(p => p?.toLowerCase() === selectedProvince.toLowerCase());
+        const matchDifficulty = selectedDifficulty === 'All' || normalizeDifficulty(difficulty) === selectedDifficulty.toLowerCase();
+        const matchDays = selectedDays === 'All' || (
+          selectedDays === '1-5 days' ? daysNum >= 1 && daysNum <= 5 :
+          selectedDays === '5-10 days' ? daysNum > 5 && daysNum <= 10 :
+          selectedDays === '10-15 days' ? daysNum > 10 && daysNum <= 15 :
+          selectedDays === '15-20 days' ? daysNum > 15 && daysNum <= 20 :
+          selectedDays === '20+ days' ? daysNum > 20 : true
+        );
+        
+        let matchBudget = selectedBudget === 'All';
+        if (!matchBudget && cost != null) {
+          if (selectedBudget === 'Low') matchBudget = cost < 70000;
+          else if (selectedBudget === 'Medium') matchBudget = cost >= 70000 && cost <= 150000;
+          else if (selectedBudget === 'High') matchBudget = cost > 150000;
+        } else if (cost == null && selectedBudget !== 'All') {
+          matchBudget = true; // Be lenient if no cost data
+        }
+        
+        console.log(`  → Province: ${matchProvince ? '✅' : '❌'} | Difficulty: ${matchDifficulty ? '✅' : '❌'} | Days: ${matchDays ? '✅' : '❌'} | Budget: ${matchBudget ? '✅' : '❌'}`);
+      });
+      console.log('========================');
+    }
+  }, [selectedProvince, selectedDifficulty, selectedDays, selectedBudget, searchQuery, allTrails, filteredTrails]);
 
   const hasActiveFilters = selectedProvince !== 'All' || selectedDifficulty !== 'All' || selectedDays !== 'All' || selectedBudget !== 'All';
 

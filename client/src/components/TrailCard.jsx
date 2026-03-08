@@ -2,6 +2,39 @@ import React from 'react';
 import { Clock, TrendingUp, Star, MapPin } from 'lucide-react';
 import ImageWithFallback from './ImageWithFallBack';
 
+// Helper function to format location object as string
+const formatLocation = (location) => {
+  if (!location) return 'Nepal';
+  
+  // If location is a string, return it
+  if (typeof location === 'string') {
+    return location;
+  }
+  
+  // If location is an object
+  if (typeof location === 'object') {
+    const parts = [];
+    
+    // Try to get a readable location name
+    if (location.provinces && Array.isArray(location.provinces) && location.provinces.length > 0) {
+      parts.push(location.provinces[0]);
+    }
+    if (location.districts && Array.isArray(location.districts) && location.districts.length > 0) {
+      parts.push(location.districts[0]);
+    }
+    if (location.start) {
+      parts.push(location.start);
+    }
+    if (location.end && !parts.includes(location.end)) {
+      parts.push(location.end);
+    }
+    
+    return parts.length > 0 ? parts.join(', ') : 'Nepal';
+  }
+  
+  return 'Nepal';
+};
+
 const TrailCard = ({ trail, onClick }) => {
   if (!trail) return null;
 
@@ -32,7 +65,7 @@ const TrailCard = ({ trail, onClick }) => {
         {/* Location */}
         <div className="flex items-center gap-1 text-gray-500 text-[10px] sm:text-xs mb-1 uppercase tracking-wide font-medium">
           <MapPin className="w-3 h-3" />
-          <span className="truncate">{trail.location}</span>
+          <span className="truncate">{formatLocation(trail.location)}</span>
         </div>
 
         {/* Title - Responsive Text Size */}

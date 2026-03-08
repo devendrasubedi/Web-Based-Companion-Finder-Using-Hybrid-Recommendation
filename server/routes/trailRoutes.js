@@ -7,6 +7,7 @@ import {
     getTrailMapData,
     addReview
 } from '../controllers/trailController.js';
+import { verifyToken } from '../middleware/verifyToken.js';
 
 const router = express.Router();
 
@@ -43,7 +44,7 @@ router.get('/:id/map', getTrailMapData);
 /* ==============================
    ADD REVIEW
 ============================== */
-router.post('/:id/reviews', addReview);
+router.post('/:id/reviews', verifyToken, addReview);
 
 
 export default router;

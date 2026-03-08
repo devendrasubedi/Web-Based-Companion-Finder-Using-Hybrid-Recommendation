@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
+import { useAuthGuard } from '../hooks/useAuthGuard';
 import TrailMap from '../components/map/TrailMap';
 import ElevationChart from '../components/map/ElevationChart';
 import WeatherForecast from '../components/TrailDetails/WeatherForecast';
@@ -126,6 +127,7 @@ const TrailDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { canPerformAction } = useAuthGuard();
   const mapSectionRef = useRef(null);
 
   const [trail, setTrail] = useState(null);
@@ -178,30 +180,55 @@ const TrailDetails = () => {
   }, [user, id]);
 
   const toggleAsync = useCallback(async (endpoint, state, setState) => {
-    if (!user) { alert('Please login first'); return; }
+    // Check authentication and verification before proceeding
+    if (!canPerformAction(endpoint === '/api/users/saved-hikes' ? 'save trails' : 'mark trails as completed')) {
+      return;
+    }
+
     const prev = state;
     setState(!prev);
     try {
       const { data } = await axios.post(endpoint, { trailId: id, trailName: trail?.name });
       if (!data.success) setState(prev);
     } catch { setState(prev); }
-  }, [user, id, trail?.name]);
+  }, [user, id, trail?.name, canPerformAction]);
 
   const handleReviewSubmit = async () => {
-    if (!user) return;
+    // Check authentication and verification before proceeding
+    if (!canPerformAction('submit reviews')) {
+      return;
+    }
+
+    // Validate user data
+    if (!user || !user._id || !user.name) {
+      alert('User data is missing. Please log in again.');
+      return;
+    }
+
     if (!newReview.rating) return alert('Please select a rating');
+    if (!newReview.comment.trim()) return alert('Please write a comment');
+
     try {
       setIsSubmittingReview(true);
-      const { data } = await axios.post(`/api/trails/${id}/reviews`, {
-        userId: user._id, userName: user.name, userImage: user.profilePicture,
-        rating: newReview.rating, comment: newReview.comment,
-      });
+      const reviewData = {
+        userId: user._id, 
+        userName: user.name, 
+        userImage: user.profilePicture || '',
+        rating: newReview.rating, 
+        comment: newReview.comment.trim(),
+      };
+      
+      console.log('Submitting review:', reviewData);
+      
+      const { data } = await axios.post(`/api/trails/${id}/reviews`, reviewData);
       if (data) {
         setTrail((p) => ({ ...p, reviews: data.reviews, rating: data.rating, numReviews: data.numReviews }));
         setNewReview({ rating: 0, comment: '' });
+        alert('Review submitted successfully!');
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to submit review');
+      console.error('Review submission error:', err);
+      alert(err.response?.data?.message || err.message || 'Failed to submit review');
     } finally { setIsSubmittingReview(false); }
   };
 
