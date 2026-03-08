@@ -66,7 +66,7 @@ export const getUserProfile = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            user: { ...user, ...(userProfile || {}), age }
+            user: { ...(userProfile || {}), ...user, age }
         });
     } catch (error) {
         console.error("Error in getUserProfile:", error);
