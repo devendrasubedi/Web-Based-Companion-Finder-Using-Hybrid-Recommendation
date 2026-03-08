@@ -52,7 +52,7 @@ const userProfileSchema = new mongoose.Schema({
     },
     experienceLevel: {
         type: String,
-        enum: ['beginner', 'intermediate', 'expert'],
+        enum: ['beginner', 'intermediate', 'advanced', 'expert'],
         default: 'beginner'
     },
     availability: {
