@@ -1,21 +1,11 @@
 import { User } from "../models/user.model.js";
 import { UserProfile } from "../models/userProfile.model.js";
-import { InteractionAggregate } from "../models/interaction_aggregate.js";
 import { UserTrailInteraction } from "../models/user_trail_interaction.js";
 import { Trail } from "../models/trailModel.js";
 
-// ── Helper: recompute implicitScore ─────────────────────────────────────────
-function computeScore({ saveCount = 0, isCompleted = false, rating = null }) {
-    return (saveCount * 3) + (isCompleted ? 5 : 0) + (rating ? rating : 0);
-}
-
-// ── Helper: upsert the aggregate and recompute score ────────────────────────
-async function upsertAggregate(userId, trailId, fields) {
-    let agg = await InteractionAggregate.findOne({ userId, trailId });
-    if (!agg) agg = new InteractionAggregate({ userId, trailId });
-    Object.assign(agg, fields, { lastInteraction: new Date() });
-    agg.implicitScore = computeScore(agg);
-    return agg.save();
+// ── Helper: recompute implicitScore (new formula, no saveCount) ─────────────
+function computeScore({ isSaved = false, isCompleted = false, rating = null }) {
+    return (isSaved ? 3 : 0) + (isCompleted ? 5 : 0) + (rating || 0);
 }
 
 // ── GET /api/users/ ──────────────────────────────────────────────────────────
@@ -84,97 +74,95 @@ export const getUserProfile = async (req, res) => {
     }
 };
 
-// ── GET /api/users/interactions ─────────────────────────────────────────────
-// Reads raw events from User_Trail_Interactions, cross-refs Interaction_Aggregates
-// for current toggle state (isCurrentlySaved, isCompleted).
+// ── GET /api/users/interactions (own profile) ────────────────────────────────
 export const getUserInteractions = async (req, res) => {
     try {
         const userId = req.userId;
 
-        // Raw event log: all save/complete/rate events for this user
-        const rawEvents = await UserTrailInteraction.find({ userId })
-            .sort({ timestamp: -1 })
-            .lean();
+        // Fetch saved and completed in parallel (single collection, filter by boolean)
+        const [savedDocs, completedDocs] = await Promise.all([
+            UserTrailInteraction.find({ userId, isSaved: true }).lean(),
+            UserTrailInteraction.find({ userId, isCompleted: true }).lean()
+        ]);
 
-        // Current state (toggle): one doc per (userId, trailId)
-        const aggregates = await InteractionAggregate.find({ userId }).lean();
-        const aggMap = new Map(aggregates.map(a => [String(a.trailId), a]));
+        // Batch-fetch trail names for both sets
+        const trailIds = [...new Set([
+            ...savedDocs.map(d => d.trailId),
+            ...completedDocs.map(d => d.trailId)
+        ])];
 
-        // Collect unique trailIds across events
-        const trailIds = [...new Set(rawEvents.map(e => String(e.trailId)))];
-
-        // Batch-fetch trail metadata
         const trails = trailIds.length
             ? await Trail.find({ _id: { $in: trailIds } }).select("_id name distance_km altitude").lean()
             : [];
         const trailMap = new Map(trails.map(t => [String(t._id), t]));
 
-        const savedHikes = [];
-        const pastHikes = [];
-        const ratedTrails = [];
-
-        // We use the aggregate for the authoritative current state
-        aggregates.forEach(agg => {
-            const trail = trailMap.get(String(agg.trailId)) || {};
-            const entry = {
-                trailId: agg.trailId,
-                trailName: trail.name || String(agg.trailId),
+        const savedHikes = savedDocs.map(doc => {
+            const trail = trailMap.get(String(doc.trailId)) || {};
+            return {
+                trailId: doc.trailId,
+                trailName: trail.name || String(doc.trailId),
                 distance_km: trail.distance_km || null,
-                rating: agg.rating
+                savedAt: doc.updatedAt,
+                rating: doc.rating
             };
-
-            if (agg.isCurrentlySaved) {
-                savedHikes.push({ ...entry, savedAt: agg.updatedAt });
-            }
-            if (agg.isCompleted) {
-                pastHikes.push({ ...entry, completedAt: agg.completedAt });
-            }
-            if (agg.rating != null) {
-                ratedTrails.push({ ...entry, ratedAt: agg.updatedAt });
-            }
         });
 
-        // Also expose the raw event log for the recommendation engine / debugging
-        const recentEvents = rawEvents.slice(0, 50).map(e => ({
-            trailId: e.trailId,
-            trailName: trailMap.get(String(e.trailId))?.name || String(e.trailId),
-            interactionType: e.interactionType,
-            rating: e.rating,
-            source: e.source,
-            timestamp: e.timestamp
-        }));
+        const pastHikes = completedDocs.map(doc => {
+            const trail = trailMap.get(String(doc.trailId)) || {};
+            return {
+                trailId: doc.trailId,
+                trailName: trail.name || String(doc.trailId),
+                distance_km: trail.distance_km || null,
+                completedAt: doc.completedAt || doc.updatedAt,
+                rating: doc.rating
+            };
+        });
 
-        res.status(200).json({ success: true, savedHikes, pastHikes, ratedTrails, recentEvents });
+        res.status(200).json({ success: true, savedHikes, pastHikes });
     } catch (error) {
         console.error("Error in getUserInteractions:", error);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };
 
-// ── GET /api/users/:id/interactions — public view of another user ───────────
+// ── GET /api/users/:id/interactions (public — another user's profile) ────────
 export const getPublicUserInteractions = async (req, res) => {
     try {
         const { id: userId } = req.params;
 
-        const aggregates = await InteractionAggregate.find({ userId }).lean();
-        const trailIds = aggregates.map(a => a.trailId);
+        const [savedDocs, completedDocs] = await Promise.all([
+            UserTrailInteraction.find({ userId, isSaved: true }).lean(),
+            UserTrailInteraction.find({ userId, isCompleted: true }).lean()
+        ]);
+
+        const trailIds = [...new Set([
+            ...savedDocs.map(d => d.trailId),
+            ...completedDocs.map(d => d.trailId)
+        ])];
+
         const trails = trailIds.length
             ? await Trail.find({ _id: { $in: trailIds } }).select("_id name distance_km").lean()
             : [];
         const trailMap = new Map(trails.map(t => [String(t._id), t]));
 
-        const savedHikes = [];
-        const pastHikes = [];
-
-        aggregates.forEach(agg => {
-            const trail = trailMap.get(String(agg.trailId)) || {};
-            const entry = {
-                trailId: agg.trailId,
-                trailName: trail.name || String(agg.trailId),
-                distance_km: trail.distance_km || null
+        const savedHikes = savedDocs.map(doc => {
+            const trail = trailMap.get(String(doc.trailId)) || {};
+            return {
+                trailId: doc.trailId,
+                trailName: trail.name || String(doc.trailId),
+                distance_km: trail.distance_km || null,
+                savedAt: doc.updatedAt
             };
-            if (agg.isCurrentlySaved) savedHikes.push({ ...entry, savedAt: agg.updatedAt });
-            if (agg.isCompleted) pastHikes.push({ ...entry, completedAt: agg.completedAt });
+        });
+
+        const pastHikes = completedDocs.map(doc => {
+            const trail = trailMap.get(String(doc.trailId)) || {};
+            return {
+                trailId: doc.trailId,
+                trailName: trail.name || String(doc.trailId),
+                distance_km: trail.distance_km || null,
+                completedAt: doc.completedAt || doc.updatedAt
+            };
         });
 
         res.status(200).json({ success: true, savedHikes, pastHikes });
@@ -188,38 +176,21 @@ export const getPublicUserInteractions = async (req, res) => {
 export const toggleSavedHike = async (req, res) => {
     try {
         const userId = req.userId;
-        const { trailId, source = "browse" } = req.body;
+        const { trailId } = req.body;
 
         if (!trailId) return res.status(400).json({ success: false, message: "Trail ID is required" });
 
-        // Read current aggregate state for toggle logic
-        let agg = await InteractionAggregate.findOne({ userId, trailId });
-        const isSaved = agg ? !agg.isCurrentlySaved : true; // first time → save
+        let doc = await UserTrailInteraction.findOne({ userId, trailId });
+        if (!doc) doc = new UserTrailInteraction({ userId, trailId });
 
-        // 1. Log raw event to User_Trail_Interactions (every save is logged)
-        if (isSaved) {
-            await UserTrailInteraction.create({
-                userId,
-                trailId,
-                interactionType: "save",
-                source: ["search", "recommendation", "browse", "shared", "unknown"].includes(source)
-                    ? source : "unknown",
-                timestamp: new Date()
-            });
-        }
-
-        // 2. Upsert Interaction_Aggregate (tracks current toggle state)
-        if (!agg) agg = new InteractionAggregate({ userId, trailId });
-        if (isSaved) agg.saveCount = (agg.saveCount || 0) + 1;
-        agg.isCurrentlySaved = isSaved;
-        agg.lastInteraction = new Date();
-        agg.implicitScore = computeScore(agg);
-        await agg.save();
+        doc.isSaved = !doc.isSaved;
+        doc.implicitScore = computeScore(doc);
+        await doc.save();
 
         res.status(200).json({
             success: true,
-            isSaved,
-            message: isSaved ? "Trail saved" : "Trail removed from saved"
+            isSaved: doc.isSaved,
+            message: doc.isSaved ? "Trail saved" : "Trail removed from saved"
         });
     } catch (error) {
         console.error("Error in toggleSavedHike:", error);
@@ -231,37 +202,22 @@ export const toggleSavedHike = async (req, res) => {
 export const toggleCompletedHike = async (req, res) => {
     try {
         const userId = req.userId;
-        const { trailId, source = "browse" } = req.body;
+        const { trailId } = req.body;
 
         if (!trailId) return res.status(400).json({ success: false, message: "Trail ID is required" });
 
-        let agg = await InteractionAggregate.findOne({ userId, trailId });
-        const isCompleted = agg ? !agg.isCompleted : true;
+        let doc = await UserTrailInteraction.findOne({ userId, trailId });
+        if (!doc) doc = new UserTrailInteraction({ userId, trailId });
 
-        // 1. Log raw event
-        if (isCompleted) {
-            await UserTrailInteraction.create({
-                userId,
-                trailId,
-                interactionType: "complete",
-                source: ["search", "recommendation", "browse", "shared", "unknown"].includes(source)
-                    ? source : "unknown",
-                timestamp: new Date()
-            });
-        }
-
-        // 2. Upsert aggregate
-        if (!agg) agg = new InteractionAggregate({ userId, trailId });
-        agg.isCompleted = isCompleted;
-        agg.completedAt = isCompleted ? new Date() : null;
-        agg.lastInteraction = new Date();
-        agg.implicitScore = computeScore(agg);
-        await agg.save();
+        doc.isCompleted = !doc.isCompleted;
+        doc.completedAt = doc.isCompleted ? new Date() : null;
+        doc.implicitScore = computeScore(doc);
+        await doc.save();
 
         res.status(200).json({
             success: true,
-            isCompleted,
-            message: isCompleted ? "Trail marked as completed" : "Trail removed from completed"
+            isCompleted: doc.isCompleted,
+            message: doc.isCompleted ? "Trail marked as completed" : "Trail removed from completed"
         });
     } catch (error) {
         console.error("Error in toggleCompletedHike:", error);

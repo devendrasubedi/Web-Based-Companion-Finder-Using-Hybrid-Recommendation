@@ -166,7 +166,7 @@ const TrailDetails = () => {
     return () => { cancelled = true; };
   }, [id]);
 
-  // Sync favorite & completed state from InteractionAggregate via API
+  // Sync favorite & completed state from User_Trail_Interactions via API
   useEffect(() => {
     if (!user || !id) return;
     axios.get('/api/users/interactions')
