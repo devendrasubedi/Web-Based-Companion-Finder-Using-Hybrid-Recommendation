@@ -1,5 +1,17 @@
 import mongoose from "mongoose";
 
+/* ══════════════════════════════════════════════════════════════
+   USER PROFILE
+
+   REMOVED (moved to dedicated collections):
+     - pastHikes       → Interaction_Aggregates { isCompleted: true }
+     - savedHikes      → Interaction_Aggregates { isCurrentlySaved: true }
+     - friends[]       → User_Relationships { status: "accepted" }
+     - friendRequests  → User_Relationships { status: "pending" }
+
+   EVERYTHING ELSE: unchanged from original
+   ══════════════════════════════════════════════════════════════ */
+
 const userProfileSchema = new mongoose.Schema({
     userId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -68,25 +80,12 @@ const userProfileSchema = new mongoose.Schema({
         type: [String],
         default: []
     },
-    pastHikes: [], // Allow mixed data (strings or objects)
-    savedHikes: [], // Allow mixed data (strings or objects)
-    friends: [{
-        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-        name: String,
-        addedAt: { type: Date, default: Date.now }
-    }],
-    friendRequests: {
-        sent: [{
-            userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-            name: String,
-            sentAt: { type: Date, default: Date.now }
-        }],
-        received: [{
-            userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-            name: String,
-            receivedAt: { type: Date, default: Date.now }
-        }]
-    },
+
+    // pastHikes REMOVED → Interaction_Aggregates { userId, isCompleted: true }
+    // savedHikes REMOVED → Interaction_Aggregates { userId, isCurrentlySaved: true }
+    // friends[] REMOVED → User_Relationships { status: "accepted" }
+    // friendRequests REMOVED → User_Relationships { status: "pending" }
+
     languagesKnown: {
         type: [String],
         default: []

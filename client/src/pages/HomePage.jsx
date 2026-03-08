@@ -38,30 +38,12 @@ const HomePage = ({ userName = "Traveler" }) => {
   
   const recommendedFriends = users.filter(user => {
     if (!authUser) return true;
-
-    // Normalize IDs to string for safe comparison
     const currentUserId = String(authUser._id || authUser.id);
     const targetUserId = String(user._id || user.id);
-
-    // Exclude own profile
     if (currentUserId === targetUserId) return false;
-    
-    // Exclude users who are already friends
-    if (authUser.friends && Array.isArray(authUser.friends)) {
-      const isFriend = authUser.friends.some(friend => {
-        // Handle potential different structures of friend object
-        let friendId = friend.userId;
-        
-        // If populated, it might be an object
-        if (typeof friendId === 'object' && friendId !== null) {
-          friendId = friendId._id || friendId;
-        }
-        
-        return String(friendId) === targetUserId;
-      });
-      if (isFriend) return false;
-    }
-    
+    // Exclude already-friends (from API-loaded statuses)
+    const status = friendStatuses[targetUserId];
+    if (status === 'friends') return false;
     return true;
   });
 
@@ -168,12 +150,34 @@ const HomePage = ({ userName = "Traveler" }) => {
 
         // Process Users
         if (usersResult.status === 'fulfilled') {
-          setUsers((usersResult.value.data || []).map(u => ({
+          const mapped = (usersResult.value.data || []).map(u => ({
+            ...u,
+            _id: u._id || u.id,
             id: u._id || u.id,
             name: u.name || 'Trekker',
             province: u.province || 'Nepal',
             district: u.district || 'Unknown'
-          })));
+          }));
+          setUsers(mapped);
+
+          // Load friend statuses from API only if logged in
+          if (authUser) {
+            const otherIds = mapped
+              .filter(u => String(u._id) !== String(authUser._id || authUser.id))
+              .map(u => u._id);
+
+            // Fetch all statuses in parallel
+            const statusResults = await Promise.allSettled(
+              otherIds.map(uid =>
+                axios.get(`/api/friends/status/${uid}`).then(r => ({ uid, status: r.data.status }))
+              )
+            );
+            const statuses = {};
+            statusResults.forEach(r => {
+              if (r.status === 'fulfilled') statuses[r.value.uid] = r.value.status;
+            });
+            setFriendStatuses(statuses);
+          }
         } else {
           console.error('Users fetch failed:', usersResult.reason);
           // We don't block the page if users fail, just log it

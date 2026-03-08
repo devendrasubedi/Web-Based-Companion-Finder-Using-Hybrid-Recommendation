@@ -5,10 +5,8 @@ const ProfileSavedHikes = ({ savedHikes }) => {
     const navigate = useNavigate();
 
     const handleHikeClick = (hike) => {
-        const hikeId = typeof hike === 'string' ? hike : (hike.id || hike._id);
-        if (hikeId) {
-            navigate(`/trail/${hikeId}`);
-        }
+        const hikeId = typeof hike === 'string' ? hike : (hike.trailId || hike.id || hike._id);
+        if (hikeId) navigate(`/trail/${hikeId}`);
     };
 
     return (
@@ -19,18 +17,30 @@ const ProfileSavedHikes = ({ savedHikes }) => {
             </h3>
             {savedHikes && savedHikes.length > 0 ? (
                 <ul className="space-y-3">
-                    {savedHikes.map((hike, index) => (
-                        <li 
-                            key={index} 
-                            onClick={() => handleHikeClick(hike)}
-                            className="flex items-start gap-3 group cursor-pointer hover:bg-muted p-2 rounded-lg -ml-2 transition-colors"
-                        >
-                            <Bookmark className="w-4 h-4 text-muted-foreground mt-0.5 group-hover:text-yellow-500 transition-colors" />
-                            <span className="text-foreground/80 group-hover:text-foreground transition-colors font-medium">
-                                {typeof hike === 'string' ? hike : hike?.name || "Unknown Trail"}
-                            </span>
-                        </li>
-                    ))}
+                    {savedHikes.map((hike, index) => {
+                        const name = typeof hike === 'string' ? hike : (hike?.trailName || hike?.name || 'Unknown Trail');
+                        const savedAt = hike?.savedAt ? new Date(hike.savedAt).toLocaleDateString() : null;
+                        const distance = hike?.distance_km ? `${hike.distance_km} km` : null;
+
+                        return (
+                            <li
+                                key={index}
+                                onClick={() => handleHikeClick(hike)}
+                                className="flex items-start gap-3 group cursor-pointer hover:bg-muted p-2 rounded-lg -ml-2 transition-colors"
+                            >
+                                <Bookmark className="w-4 h-4 text-muted-foreground mt-0.5 group-hover:text-yellow-500 transition-colors shrink-0" />
+                                <div className="min-w-0">
+                                    <span className="text-foreground/80 group-hover:text-foreground transition-colors font-medium block truncate">
+                                        {name}
+                                    </span>
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        {distance && <span>{distance}</span>}
+                                        {savedAt && <span>{savedAt}</span>}
+                                    </div>
+                                </div>
+                            </li>
+                        );
+                    })}
                 </ul>
             ) : (
                 <p className="text-muted-foreground text-sm italic py-4">No trails saved yet.</p>

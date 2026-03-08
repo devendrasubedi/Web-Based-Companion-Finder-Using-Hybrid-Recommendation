@@ -1,4 +1,4 @@
-import { MapPin, Camera, User, Edit2, LogOut, X, Check, Languages, UserMinus } from 'lucide-react';
+import { MapPin, Camera, User, Edit2, LogOut, X, Check, Languages, UserMinus, UserPlus, Clock, UserCheck } from 'lucide-react';
 
 // Helper to calculate age
 const calculateAge = (dob) => {
@@ -24,7 +24,9 @@ const ProfileDetails = ({
     editedUser,
     setEditedUser,
     friendStatus,
-    onRemoveCurrentFriend
+    onRemoveCurrentFriend,
+    onSendFriendRequest,
+    onCancelFriendRequest
 }) => {
 
     // Calculate Age
@@ -160,10 +162,37 @@ const ProfileDetails = ({
                                 )
                             ) : (
                                 <>
+                                    {friendStatus === 'none' && (
+                                        <button
+                                            onClick={onSendFriendRequest}
+                                            className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 transition-all font-medium shadow-sm"
+                                        >
+                                            <UserPlus className="w-4 h-4" />
+                                            Add Friend
+                                        </button>
+                                    )}
+                                    {friendStatus === 'request_sent' && (
+                                        <button
+                                            onClick={onCancelFriendRequest}
+                                            className="flex items-center gap-2 px-5 py-2.5 bg-muted text-muted-foreground border border-border rounded-full hover:bg-destructive/10 hover:text-destructive transition-all font-medium"
+                                        >
+                                            <Clock className="w-4 h-4" />
+                                            Request Sent
+                                        </button>
+                                    )}
+                                    {friendStatus === 'request_received' && (
+                                        <button
+                                            onClick={onSendFriendRequest}
+                                            className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-full hover:bg-green-700 transition-all font-medium shadow-sm"
+                                        >
+                                            <UserCheck className="w-4 h-4" />
+                                            Accept Request
+                                        </button>
+                                    )}
                                     {friendStatus === 'friends' && (
                                         <button
                                             onClick={onRemoveCurrentFriend}
-                                            className="flex items-center gap-2 px-5 py-2.5 bg-destructive/10 text-destructive border border-destructive/20 rounded-full hover:bg-destructive/20 transition-all font-medium shadow-sm"
+                                            className="flex items-center gap-2 px-5 py-2.5 bg-destructive/10 text-destructive border border-destructive/20 rounded-full hover:bg-destructive/20 transition-all font-medium"
                                         >
                                             <UserMinus className="w-4 h-4" />
                                             Remove Friend

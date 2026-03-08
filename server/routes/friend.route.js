@@ -3,10 +3,13 @@ import {
     sendFriendRequest,
     acceptFriendRequest,
     rejectFriendRequest,
+    cancelFriendRequest,
     removeFriend,
     getFriendRequests,
     getFriends,
-    getFriendStatus
+    getFriendStatus,
+    blockUser,
+    unblockUser
 } from "../controllers/friend.controller.js";
 import { verifyToken } from "../middleware/verifyToken.js";
 
@@ -20,6 +23,13 @@ router.post("/accept", verifyToken, acceptFriendRequest);
 
 // Reject friend request
 router.post("/reject", verifyToken, rejectFriendRequest);
+
+// Cancel own sent request
+router.post("/cancel", verifyToken, cancelFriendRequest);
+
+// Block / unblock
+router.post("/block", verifyToken, blockUser);
+router.post("/unblock", verifyToken, unblockUser);
 
 // Remove friend
 router.delete("/:friendId", verifyToken, removeFriend);
