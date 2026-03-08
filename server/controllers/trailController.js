@@ -19,7 +19,7 @@ export const getAllTrails = async (req, res) => {
             // Optimization: Limit removed to allow Explore page to see all trails
             // { $limit: 20 },
             // Keep only necessary fields
-            { $project: { name: 1, difficulty: 1, description: 1, location: 1, duration: 1, tags: 1, rating: 1 } },
+            { $project: { name: 1, difficulty: 1, description: 1, location: 1, duration: 1, cost: 1, tags: 1, rating: 1 } },
             {
                 $addFields: {
                     durationDays: { $ifNull: ["$duration.min_days", null] }
@@ -56,8 +56,9 @@ export const getAllTrails = async (req, res) => {
                 name: t.name,
                 difficulty: t.difficulty,
                 description: t.description,
-                location: (t.location && (t.location.start || (t.location.provinces && t.location.provinces[0]) || '')) || '',
+                location: t.location || { provinces: [], districts: [], start: '', end: '' },  // Return full location object
                 duration: t.duration || 'N/A',
+                cost: t.cost || { min_npr: null, max_npr: null },  // Return full cost object
                 image: "https://via.placeholder.com/600x400?text=Loading...", // Placeholder
                 tags: t.tags || [],
                 rating: t.rating || 0,
@@ -72,8 +73,14 @@ export const getAllTrails = async (req, res) => {
             return card;
         });
 
-        console.log(`[getAllTrails] Returning ${cardData.length} trails. Sample trail with image:`,
-            cardData.find(t => t.image && !t.image.includes('placeholder')));
+        console.log(`[getAllTrails] Returning ${cardData.length} trails.`);
+        if (cardData.length > 0) {
+            console.log('Sample trail structure:', {
+                name: cardData[0].name,
+                location: cardData[0].location,
+                provinces: cardData[0].location?.provinces
+            });
+        }
 
         // If no trails in database, return sample data
         if (cardData.length === 0) {
@@ -386,40 +393,57 @@ export const getTrailImage = (req, res) => {
 export const addReview = async (req, res) => {
     try {
         const { rating, comment, userId, userName, userImage } = req.body;
-        const trail = await Trail.findById(req.params.id);
 
-        if (trail) {
-            // Check if user already reviewed
-            const alreadyReviewed = trail.reviews.find(
-                (r) => r.userId.toString() === userId.toString()
-            );
-
-            if (alreadyReviewed) {
-                return res.status(400).json({ message: 'Trail already reviewed' });
-            }
-
-            const review = {
-                userName,
-                userId,
-                userImage,
-                rating: Number(rating),
-                comment,
-            };
-
-            trail.reviews.push(review);
-            trail.numReviews = trail.reviews.length;
-
-            trail.rating =
-                trail.reviews.reduce((acc, item) => item.rating + acc, 0) /
-                trail.reviews.length;
-
-            await trail.save();
-            res.status(201).json({ message: 'Review added', reviews: trail.reviews, rating: trail.rating, numReviews: trail.numReviews });
-        } else {
-            res.status(404).json({ message: 'Trail not found' });
+        // Validate required fields
+        if (!userId || !userName || !rating || !comment) {
+            return res.status(400).json({ message: 'Missing required fields: userId, userName, rating, comment' });
         }
+
+        const trail = await Trail.findById(req.params.id).exec();
+
+        if (!trail) {
+            return res.status(404).json({ message: 'Trail not found' });
+        }
+
+        // Ensure reviews array exists and is an array
+        if (!Array.isArray(trail.reviews)) {
+            trail.reviews = [];
+        }
+
+        // Check if user already reviewed
+        const alreadyReviewed = trail.reviews.find(
+            (r) => r.userId && r.userId.toString() === userId.toString()
+        );
+
+        if (alreadyReviewed) {
+            return res.status(400).json({ message: 'Trail already reviewed' });
+        }
+
+        const review = {
+            userName,
+            userId,
+            userImage: userImage || '',
+            rating: Number(rating),
+            comment,
+            createdAt: new Date()
+        };
+
+        trail.reviews.push(review);
+        trail.numReviews = trail.reviews.length;
+
+        // Calculate average rating
+        trail.rating = trail.reviews.length > 0
+            ? trail.reviews.reduce((acc, item) => acc + (item.rating || 0), 0) / trail.reviews.length
+            : 0;
+
+        // Mark reviews as modified for Mongoose
+        trail.markModified('reviews');
+        await trail.save({ validateBeforeSave: false });
+
+        res.status(201).json({ message: 'Review added', reviews: trail.reviews, rating: trail.rating, numReviews: trail.numReviews });
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        console.error('Error adding review:', error);
+        res.status(400).json({ message: error.message || 'Failed to add review' });
     }
 }
 

@@ -46,7 +46,8 @@ const TrailSchema = new mongoose.Schema({
   itinerary: [ItinerarySchema]
 }, {
   collection: "Trails_metadata",
-  timestamps: true
+  timestamps: true,
+  versionKey: false
 });
 
 /* ==============================
