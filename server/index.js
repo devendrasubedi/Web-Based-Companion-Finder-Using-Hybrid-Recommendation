@@ -50,6 +50,7 @@ console.log('✓ Friend routes mounted at /api/friends');
 //   connectDB()
 //   console.log(`Example app listening on port ${PORT}`)
 // })
+
 const startServer = async () => {
   try {
     await connectDB();

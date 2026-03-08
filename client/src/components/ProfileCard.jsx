@@ -1,5 +1,6 @@
 import React from 'react';
 import { MapPin, Languages, UserPlus, UserCheck, Clock } from 'lucide-react';
+import { useAuthGuard } from '../hooks/useAuthGuard';
 
 const ProfileCard = ({
   user,
@@ -9,11 +10,18 @@ const ProfileCard = ({
   onAddFriend,
   onAcceptRequest
 }) => {
+  const { canPerformAction } = useAuthGuard();
+
   // Guard clause to prevent crashes if user data is missing
   if (!user) return null;
 
   const handleFriendAction = (e) => {
     e.stopPropagation();
+
+    // Check authentication and verification before proceeding
+    if (!canPerformAction('add or manage friends')) {
+      return;
+    }
 
     // Use _id preferably, fallback to id
     const userId = user._id || user.id;

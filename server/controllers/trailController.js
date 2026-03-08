@@ -1,16 +1,15 @@
+
 import { Trail, TrailGeoJSON } from '../models/trailModel.js';
-import { UserTrailInteraction } from '../models/user_trail_interaction.js';
-import { InteractionAggregate } from '../models/interaction_aggregate.js';
+import path from 'path';
+import fs from 'fs';
 import mongoose from 'mongoose';
 
-// Helper: recompute implicitScore
-function computeScore({ saveCount = 0, isCompleted = false, rating = null }) {
-    return (saveCount * 3) + (isCompleted ? 5 : 0) + (rating ? rating : 0);
-}
 
-
-// --- SERVER-SIDE IMAGE URL CACHING ---
+// --- SERVER-SIDE CACHING ---
+// Store image URLs in memory to avoid repeated DB lookups
 const globalImageUrlCache = new Map();
+// Store local file paths (legacy)
+const imageCache = new Map();
 
 // FOR THE CARDS (List View)
 // Returns a compact set of fields tailored for the front-end cards and search/filter
@@ -21,7 +20,7 @@ export const getAllTrails = async (req, res) => {
             // Optimization: Limit removed to allow Explore page to see all trails
             // { $limit: 20 },
             // Keep only necessary fields
-            { $project: { name: 1, difficulty: 1, description: 1, location: 1, duration: 1, tags: 1, rating: 1, numReviews: 1, distance_km: 1, altitude: 1 } },
+            { $project: { name: 1, difficulty: 1, description: 1, location: 1, duration: 1, cost: 1, tags: 1, rating: 1 } },
             {
                 $addFields: {
                     durationDays: { $ifNull: ["$duration.min_days", null] }
@@ -38,9 +37,7 @@ export const getAllTrails = async (req, res) => {
                     duration: { $cond: [{ $ifNull: ["$durationDays", false] }, { $concat: [{ $toString: "$durationDays" }, " days"] }, null] },
                     tags: 1,
                     rating: 1,
-                    numReviews: 1,
-                    distance_km: 1,
-                    altitude: 1
+                    numReviews: 1
                 }
             }
         ]);
@@ -52,19 +49,21 @@ export const getAllTrails = async (req, res) => {
 
         // Map to simpler keys the client expects and add images
         let cardData = trails.map(t => {
+            const trailId = String(t._id);
+            // const imageUrl = imagesMap.get(trailId);
+
             const card = {
                 id: t._id,
                 name: t.name,
                 difficulty: t.difficulty,
                 description: t.description,
-                location: (t.location && (t.location.start || (t.location.provinces && t.location.provinces[0]) || '')) || '',
+                location: t.location || { provinces: [], districts: [], start: '', end: '' },  // Return full location object
                 duration: t.duration || 'N/A',
+                cost: t.cost || { min_npr: null, max_npr: null },  // Return full cost object
                 image: "https://via.placeholder.com/600x400?text=Loading...", // Placeholder
                 tags: t.tags || [],
                 rating: t.rating || 0,
-                numReviews: t.numReviews || 0,
-                distance_km: t.distance_km || null,
-                altitude: t.altitude || null
+                numReviews: t.numReviews || 0
             };
 
             // Log if image is missing
@@ -75,8 +74,14 @@ export const getAllTrails = async (req, res) => {
             return card;
         });
 
-        console.log(`[getAllTrails] Returning ${cardData.length} trails. Sample trail with image:`,
-            cardData.find(t => t.image && !t.image.includes('placeholder')));
+        console.log(`[getAllTrails] Returning ${cardData.length} trails.`);
+        if (cardData.length > 0) {
+            console.log('Sample trail structure:', {
+                name: cardData[0].name,
+                location: cardData[0].location,
+                provinces: cardData[0].location?.provinces
+            });
+        }
 
         // If no trails in database, return sample data
         if (cardData.length === 0) {
@@ -339,8 +344,6 @@ export const getTrailMapData = async (req, res) => {
             type: "FeatureCollection",
             trailId: geoData.trailId,
             totalDistanceKm: geoData.totalDistanceKm,
-            totalAscent: geoData.totalAscent || 0,
-            totalDescent: geoData.totalDescent || 0,
             features: geoData.features  // each has geometry + properties.name + properties.distanceKm
         });
     } catch (error) {
@@ -350,92 +353,99 @@ export const getTrailMapData = async (req, res) => {
 };
 
 
-// getTrailImage removed — all images served from Cloudinary via /api/trails/:id/media
+// Get image for a trail by trail ID
+export const getTrailImage = (req, res) => {
+    const { trailId } = req.params;
+    const localPath = imageCache.get(trailId);
+
+    if (!localPath) {
+        return res.status(404).json({ message: "Image not found" });
+    }
+
+    // Convert Windows path to proper file path and construct full path
+    const cleanPath = localPath.replace(/\\/g, '/');
+
+    // Try multiple possible locations for the images folder
+    let fullPath;
+
+    // Check if images are in root project folder
+    let possiblePath = path.join(process.cwd(), '..', cleanPath);
+    if (fs.existsSync(possiblePath)) {
+        fullPath = possiblePath;
+    } else {
+        // Check if images are in server folder
+        possiblePath = path.join(process.cwd(), cleanPath);
+        fullPath = possiblePath;
+    }
+
+    console.log('Requested image path:', fullPath);
+
+    res.sendFile(fullPath, (err) => {
+        if (err) {
+            console.error('Error sending image:', err.message);
+            res.status(404).json({ message: "Image file not found on disk", path: fullPath });
+        }
+    });
+};
 
 
 
-// Add a Review
+// NEW: Add a Review
 export const addReview = async (req, res) => {
     try {
         const { rating, comment, userId, userName, userImage } = req.body;
-        const trailId = req.params.id;
 
-        if (!userId || !rating) {
-            return res.status(400).json({ message: 'userId and rating are required' });
+        // Validate required fields
+        if (!userId || !userName || !rating || !comment) {
+            return res.status(400).json({ message: 'Missing required fields: userId, userName, rating, comment' });
         }
 
-        const numRating = Number(rating);
+        const trail = await Trail.findById(req.params.id).exec();
 
-        // ── 1. Check trail exists and duplicate review ────────────────
-        // Use lean() so we never call .save() and avoid the __v: null $inc bug
-        const existing = await Trail.findById(trailId).select('reviews rating numReviews').lean();
-
-        if (!existing) {
+        if (!trail) {
             return res.status(404).json({ message: 'Trail not found' });
         }
 
-        const existingReviews = existing.reviews || [];
-        const alreadyReviewed = existingReviews.find(
-            (r) => r.userId?.toString() === userId.toString()
+        // Ensure reviews array exists and is an array
+        if (!Array.isArray(trail.reviews)) {
+            trail.reviews = [];
+        }
+
+        // Check if user already reviewed
+        const alreadyReviewed = trail.reviews.find(
+            (r) => r.userId && r.userId.toString() === userId.toString()
         );
 
         if (alreadyReviewed) {
-            return res.status(400).json({ message: 'You have already reviewed this trail' });
+            return res.status(400).json({ message: 'Trail already reviewed' });
         }
 
-        // ── 2. Push review and recompute rating using findByIdAndUpdate ──
-        // This bypasses Mongoose's version key ($inc __v) which fails when __v is null
-        const newReview = {
+        const review = {
             userName,
             userId,
             userImage: userImage || '',
-            rating: numRating,
-            comment: comment?.trim() || '',
+            rating: Number(rating),
+            comment,
             createdAt: new Date()
         };
 
-        const updatedReviews = [...existingReviews, newReview];
-        const newAvgRating = updatedReviews.reduce((acc, r) => acc + r.rating, 0) / updatedReviews.length;
-        const newNumReviews = updatedReviews.length;
+        trail.reviews.push(review);
+        trail.numReviews = trail.reviews.length;
 
-        // Use $set for reviews (not $push) — $push fails when the field is null in old documents
-        await Trail.collection.updateOne(
-            { _id: trailId },
-            {
-                $set: {
-                    reviews: updatedReviews,
-                    rating: Math.round(newAvgRating * 10) / 10,
-                    numReviews: newNumReviews
-                }
-            }
-        );
+        // Calculate average rating
+        trail.rating = trail.reviews.length > 0
+            ? trail.reviews.reduce((acc, item) => acc + (item.rating || 0), 0) / trail.reviews.length
+            : 0;
 
-        // ── 3. Dual-write: log rate event to User_Trail_Interactions ────
-        await UserTrailInteraction.create({
-            userId,
-            trailId,
-            interactionType: 'rate',
-            rating: numRating,
-            source: 'browse',
-            timestamp: new Date()
-        });
+        // Mark reviews as modified for Mongoose
+        trail.markModified('reviews');
+        await trail.save({ validateBeforeSave: false });
 
-        // ── 4. Dual-write: upsert Interaction_Aggregate with rating ─────
-        let agg = await InteractionAggregate.findOne({ userId, trailId });
-        if (!agg) agg = new InteractionAggregate({ userId, trailId });
-        agg.rating = numRating;
-        agg.lastInteraction = new Date();
-        agg.implicitScore = computeScore(agg);
-        await agg.save();
-
-        res.status(201).json({
-            message: 'Review added',
-            reviews: updatedReviews,
-            rating: Math.round(newAvgRating * 10) / 10,
-            numReviews: newNumReviews
-        });
+        res.status(201).json({ message: 'Review added', reviews: trail.reviews, rating: trail.rating, numReviews: trail.numReviews });
     } catch (error) {
-        console.error('[addReview]', error);
-        res.status(500).json({ message: error.message });
+        console.error('Error adding review:', error);
+        res.status(400).json({ message: error.message || 'Failed to add review' });
     }
-}
+}
+
+export { imageCache };

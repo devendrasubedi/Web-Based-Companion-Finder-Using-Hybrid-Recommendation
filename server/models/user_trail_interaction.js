@@ -1,29 +1,5 @@
 import mongoose from "mongoose";
 
-/* ==============================
-   USER TRAIL INTERACTION (Raw Event Log)
-   
-   WHAT IT DOES:
-     - Logs every save/complete/rate event as individual documents
-     - Time-series data — enables temporal decay (recent events weighted more)
-     - source field tracks how user found the trail (measures recommendation quality)
-   
-   WHAT IT STORES:
-     - interactionType: "save" | "complete" | "rate" (no "view")
-     - rating: only populated when interactionType is "rate"
-     - source: "search" | "recommendation" | "browse" | "shared" | "unknown"
-     - timestamp: when the event happened
-   
-   WHO READS IT:
-     - Python microservice for detailed temporal analysis
-     - Node.js aggregation pipeline to update Interaction_Aggregates
-   
-   INDEXES:
-     - (userId, trailId) compound — fast lookup per user per trail
-     - trailId alone — build item vectors for CF
-     - interactionType — filter by event type during aggregation
-     - timestamp descending — recency queries
-   ============================== */
 const UserTrailInteractionSchema = new mongoose.Schema({
     userId: {
         type: mongoose.Schema.Types.ObjectId,

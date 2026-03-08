@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Menu, X, Mountain, User, MessageCircle, Home, Compass, Users } from 'lucide-react';
+import { Menu, X, Mountain, User, MessageCircle, Home, Compass, Users, LogOut } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import useChatStore from '../store/useChatStore';
+import { useAuthStore } from '../store/authStore';
 
 const NavBar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const { conversations } = useChatStore();
+  const { isAuthenticated, logout } = useAuthStore();
 
   const unreadCount = conversations.reduce((acc, curr) => acc + (curr.unreadCount || 0), 0);
 
@@ -34,28 +36,56 @@ const NavBar = () => {
               <Compass className="w-4 h-4" />
               Explore
             </Link>
-            <Link to="/groups" className={`${isActive('/groups')} transition-colors text-sm font-medium flex items-center gap-1.5`}>
-              <Users className="w-4 h-4" />
-              Groups
-            </Link>
-            <Link to="/messages" className={`${isActive('/messages')} transition-colors text-sm font-medium flex items-center gap-1.5 relative`}>
-              <MessageCircle className="w-4 h-4" />
-              Messages
-              {unreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-3 bg-red-500 text-white text-[10px] font-bold h-4 w-4 bg-red-500 rounded-full flex items-center justify-center">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </Link>
 
-            {/* Profile Icon */}
-            <div className="border-l border-gray-200 pl-6 ml-2">
-              <Link to="/profile">
-                <button className={`p-2 rounded-full transition-all ${location.pathname.startsWith('/profile') ? 'bg-green-50 text-green-700' : 'bg-gray-50 hover:bg-green-50 text-gray-600 hover:text-green-700'}`}>
-                  <User className="w-5 h-5" />
-                </button>
-              </Link>
-            </div>
+            {isAuthenticated ? (
+              <>
+                <Link to="/groups" className={`${isActive('/groups')} transition-colors text-sm font-medium flex items-center gap-1.5`}>
+                  <Users className="w-4 h-4" />
+                  Groups
+                </Link>
+                <Link to="/messages" className={`${isActive('/messages')} transition-colors text-sm font-medium flex items-center gap-1.5 relative`}>
+                  <MessageCircle className="w-4 h-4" />
+                  Messages
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1.5 -right-3 bg-red-500 text-white text-[10px] font-bold h-4 w-4 bg-red-500 rounded-full flex items-center justify-center">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </Link>
+
+                {/* Profile & Logout for Authenticated Users */}
+                <div className="border-l border-gray-200 pl-6 ml-2 flex items-center gap-4">
+                  <Link to="/profile">
+                    <button className={`p-2 rounded-full transition-all ${location.pathname === '/profile' ? 'bg-green-50 text-green-700' : 'bg-gray-50 hover:bg-green-50 text-gray-600 hover:text-green-700'}`}>
+                      <User className="w-5 h-5" />
+                    </button>
+                  </Link>
+                  <button
+                    onClick={() => logout()}
+                    className="p-2 rounded-full transition-all bg-gray-50 hover:bg-red-50 text-gray-600 hover:text-red-600"
+                    title="Logout"
+                  >
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Login/Signup buttons for non-authenticated users */}
+                <div className="border-l border-gray-200 pl-6 ml-2 flex items-center gap-3">
+                  <Link to="/login">
+                    <button className="px-4 py-2 text-sm font-medium text-green-700 border border-green-600 rounded-lg hover:bg-green-50 transition-colors">
+                      Login
+                    </button>
+                  </Link>
+                  <Link to="/signup">
+                    <button className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors">
+                      Sign Up
+                    </button>
+                  </Link>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -91,39 +121,74 @@ const NavBar = () => {
               <Compass className="w-5 h-5" />
               Explore
             </Link>
-            <Link
-              to="/groups"
-              onClick={() => setIsOpen(false)}
-              className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-green-700 hover:bg-green-50"
-            >
-              <Users className="w-5 h-5" />
-              Groups
-            </Link>
-            <Link
-              to="/messages"
-              onClick={() => setIsOpen(false)}
-              className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-green-700 hover:bg-green-50 justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <MessageCircle className="w-5 h-5" />
-                Messages
-              </div>
-              {unreadCount > 0 && (
-                <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </Link>
-            <div className="border-t border-gray-100 my-2 pt-2">
-              <Link
-                to="/profile"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-green-700 hover:bg-green-50"
-              >
-                <User className="w-5 h-5" />
-                My Profile
-              </Link>
-            </div>
+
+            {isAuthenticated ? (
+              <>
+                <Link
+                  to="/groups"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-green-700 hover:bg-green-50"
+                >
+                  <Users className="w-5 h-5" />
+                  Groups
+                </Link>
+                <Link
+                  to="/messages"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-green-700 hover:bg-green-50 justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <MessageCircle className="w-5 h-5" />
+                    Messages
+                  </div>
+                  {unreadCount > 0 && (
+                    <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </Link>
+                <div className="border-t border-gray-100 my-2 pt-2">
+                  <Link
+                    to="/profile"
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-green-700 hover:bg-green-50"
+                  >
+                    <User className="w-5 h-5" />
+                    My Profile
+                  </Link>
+                  <button
+                    onClick={async () => {
+                      await logout();
+                      setIsOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-red-600 hover:bg-red-50"
+                  >
+                    <LogOut className="w-5 h-5" />
+                    Logout
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="border-t border-gray-100 my-2 pt-2 space-y-2">
+                  <Link
+                    to="/login"
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-green-700 hover:bg-green-50"
+                  >
+                    <User className="w-5 h-5" />
+                    Login
+                  </Link>
+                  <Link
+                    to="/signup"
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-white bg-green-600 hover:bg-green-700"
+                  >
+                    Sign Up
+                  </Link>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

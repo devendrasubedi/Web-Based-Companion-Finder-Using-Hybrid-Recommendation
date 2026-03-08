@@ -8,10 +8,12 @@ import Footer from '../components/Footer';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
+import { useAuthGuard } from '../hooks/useAuthGuard';
 
 const HomePage = ({ userName = "Traveler" }) => {
   const navigate = useNavigate();
   const { user: authUser } = useAuthStore();
+  const { canPerformAction } = useAuthGuard();
   const friendScrollRef = useRef(null);
   const popularScrollRef = useRef(null);
 
@@ -46,6 +48,11 @@ const HomePage = ({ userName = "Traveler" }) => {
   });
 
   const handleAddFriend = async (userId, userName) => {
+    // Check authentication and verification before proceeding
+    if (!canPerformAction('send friend requests')) {
+      return;
+    }
+
     try {
       const response = await axios.post('/api/friends/request', {
         receiverId: userId,
@@ -66,6 +73,11 @@ const HomePage = ({ userName = "Traveler" }) => {
   };
 
   const handleAcceptRequest = async (userId, userName) => {
+    // Check authentication and verification before proceeding
+    if (!canPerformAction('manage friend requests')) {
+      return;
+    }
+
     try {
       const response = await axios.post('/api/friends/accept', {
         senderId: userId,

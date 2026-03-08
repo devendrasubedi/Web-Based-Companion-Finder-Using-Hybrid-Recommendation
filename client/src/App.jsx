@@ -23,7 +23,7 @@ import { useAuthStore } from "./store/authStore";
 import { useEffect } from "react";
 import { SocketProvider } from "./context/SocketContext";
 
-// protect routes that require authentication
+// protect routes that require full authentication (login + verified)
 const ProtectedRoute = ({ children }) => {
 	const { isAuthenticated, user } = useAuthStore();
 
@@ -31,18 +31,44 @@ const ProtectedRoute = ({ children }) => {
 		return <Navigate to='/login' replace />;
 	}
 
-	if (!user.isVerified) {
+	if (!user?.isVerified) {
 		return <Navigate to='/verify-email' replace />;
 	}
 
 	return children;
 };
 
-// redirect authenticated users to the home page
+// Protect profile route - redirects to homepage if not authenticated
+const ProtectedProfileRoute = ({ children }) => {
+	const { isAuthenticated, user } = useAuthStore();
+
+	if (!isAuthenticated) {
+		return <Navigate to='/' replace />;
+	}
+
+	if (!user?.isVerified) {
+		return <Navigate to='/verify-email' replace />;
+	}
+
+	return children;
+};
+
+// Protect pages that should only be accessible to authenticated users (for messaging etc)
+const AuthRequiredRoute = ({ children }) => {
+	const { isAuthenticated } = useAuthStore();
+
+	if (!isAuthenticated) {
+		return <Navigate to='/login' replace />;
+	}
+
+	return children;
+};
+
+// redirect authenticated users away from auth pages
 const RedirectAuthenticatedUser = ({ children }) => {
 	const { isAuthenticated, user } = useAuthStore();
 
-	if (isAuthenticated && user.isVerified) {
+	if (isAuthenticated && user?.isVerified) {
 		return <Navigate to='/' replace />;
 	}
 
@@ -86,21 +112,30 @@ function App() {
 	return (
 		<SocketProvider>
 			<Routes>
-				{/* Protected Routes with MainLayout */}
+				{/* Public Routes with MainLayout - No authentication required for access */}
+				<Route element={<MainLayout />}>
+					{/* HomePage - Fully public, no auth required */}
+					<Route path='/' element={<HomePage />} />
+					{/* These pages are public but contain action-protected buttons */}
+					<Route path='/explore' element={<ExploreSearchPage />} />
+					<Route path='/trail/:id' element={<TrailDetails />} />
+					{/* Others' profiles are public for viewing */}
+					<Route path='/profile/:id' element={<ProfilePage />} />
+				</Route>
+
+				{/* Protected Routes - Require authentication */}
 				<Route
 					element={
-						<ProtectedRoute>
+						<AuthRequiredRoute>
 							<MainLayout />
-						</ProtectedRoute>
+						</AuthRequiredRoute>
 					}
 				>
-					<Route path='/' element={<HomePage />} />
-					<Route path='/explore' element={<ExploreSearchPage />} />
+					{/* Own profile - requires login (redirects to home if not authenticated) */}
+					<Route path='/profile' element={<ProfilePage />} />
+					{/* These pages require login */}
 					<Route path='/groups' element={<GroupsPage />} />
 					<Route path='/messages' element={<MessagesPage />} />
-					<Route path='/profile' element={<ProfilePage />} />
-					<Route path='/profile/:id' element={<ProfilePage />} />
-					<Route path='/trail/:id' element={<TrailDetails />} />
 					<Route path='/preferences' element={<PreferencesPage />} />
 				</Route>
 

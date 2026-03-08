@@ -5,7 +5,7 @@ import mongoose from "mongoose";
 
    REMOVED (moved to dedicated collections):
      - pastHikes       → Interaction_Aggregates { isCompleted: true }
-     - savedHikes      → Interaction_Aggregates { isCurrentlySaved: true }
+     - savedHikes      → User_Trail_Interactions { isSaved: true }
      - friends[]       → User_Relationships { status: "accepted" }
      - friendRequests  → User_Relationships { status: "pending" }
 
@@ -82,7 +82,7 @@ const userProfileSchema = new mongoose.Schema({
     },
 
     // pastHikes REMOVED → Interaction_Aggregates { userId, isCompleted: true }
-    // savedHikes REMOVED → Interaction_Aggregates { userId, isCurrentlySaved: true }
+    // savedHikes REMOVED → User_Trail_Interactions { userId, isSaved: true }
     // friends[] REMOVED → User_Relationships { status: "accepted" }
     // friendRequests REMOVED → User_Relationships { status: "pending" }
 
