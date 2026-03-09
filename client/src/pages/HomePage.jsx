@@ -17,8 +17,8 @@ const HomePage = ({ userName = "Traveler" }) => {
   const friendScrollRef = useRef(null);
   const popularScrollRef = useRef(null);
 
-  const [trails, setTrails] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [recTrails, setRecTrails] = useState([]);
+  const [companions, setCompanions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [friendStatuses, setFriendStatuses] = useState({});
@@ -33,15 +33,14 @@ const HomePage = ({ userName = "Traveler" }) => {
     }
   };
 
-  const recommendedTrails = trails.slice(0, 13);
-  const popularTrails = trails.slice(5);
-  
-  const recommendedFriends = users.filter(user => {
+  const recommendedTrails = recTrails.slice(0, 13);
+  const popularTrails = recTrails.slice(13);
+
+  const recommendedFriends = companions.filter(user => {
     if (!authUser) return true;
     const currentUserId = String(authUser._id || authUser.id);
     const targetUserId = String(user._id || user.id);
     if (currentUserId === targetUserId) return false;
-    // Exclude already-friends (from API-loaded statuses)
     const status = friendStatuses[targetUserId];
     if (status === 'friends') return false;
     return true;
@@ -103,97 +102,119 @@ const HomePage = ({ userName = "Traveler" }) => {
         setIsLoading(true);
         setError(null);
 
-        // Standard Pattern: Fetch dependent data in parallel
-        // We use Promise.allSettled to ensure one failure doesn't block the other content
-        const [trailsResult, usersResult] = await Promise.allSettled([
-          axios.get('/api/trails'),
-          axios.get('/api/users')
-        ]);
+        let trailList = [];
+        let userList = [];
 
-        // Process Trails
-        if (trailsResult.status === 'fulfilled') {
-          const initialTrails = (trailsResult.value.data || []).map(t => {
-            // INSTANT LOAD from LocalStorage
-            try {
-              const cachedImages = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
-              if (cachedImages[t.id]) {
-                return { ...t, image: cachedImages[t.id] };
-              }
-            } catch (e) {/* ignore */ }
-            return t;
-          });
-          setTrails(initialTrails);
+        if (authUser) {
+          // Logged-in: fetch personalized recommendations
+          const [trailsResult, companionsResult] = await Promise.allSettled([
+            axios.get('/api/recommendations/trails'),
+            axios.get('/api/recommendations/companions'),
+          ]);
 
-          // Lazy Load Images in Background
-          if (initialTrails.length > 0) {
-            const trailIds = initialTrails.map(t => t.id);
-            // Non-blocking call
-            axios.post('/api/trails/batch-images', { ids: trailIds })
-              .then(imgResp => {
-                const imagesMap = imgResp.data;
-                try {
-                  const currentCache = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
-                  localStorage.setItem('trail_images_cache', JSON.stringify({ ...currentCache, ...imagesMap }));
-                } catch (e) {/* ignore */ }
+          if (trailsResult.status === 'fulfilled') {
+            trailList = trailsResult.value.data.trails || [];
+          } else {
+            console.error('Rec trails fetch failed:', trailsResult.reason);
+            setError('Failed to load trails. Please try again.');
+          }
 
-                setTrails(prevTrails => prevTrails.map(t => {
-                  const newImage = imagesMap[String(t.id)];
-                  return newImage ? { ...t, image: newImage } : t;
-                }));
-              })
-              .catch(e => console.error("Background image fetch failed", e));
+          if (companionsResult.status === 'fulfilled') {
+            userList = (companionsResult.value.data.companions || []).map(u => ({
+              ...u,
+              _id: u._id || u.id,
+              id: u._id || u.id,
+              name: u.name || 'Trekker',
+              province: u.province || 'Nepal',
+              district: u.district || 'Unknown',
+            }));
+          } else {
+            console.error('Companions fetch failed:', companionsResult.reason);
           }
         } else {
-          console.error('Trails fetch failed:', trailsResult.reason);
-          setError("Failed to load trails. Please try again.");
+          // Guest: fall back to public endpoints
+          const [trailsResult, usersResult] = await Promise.allSettled([
+            axios.get('/api/trails'),
+            axios.get('/api/users'),
+          ]);
+
+          if (trailsResult.status === 'fulfilled') {
+            trailList = trailsResult.value.data || [];
+          } else {
+            console.error('Trails fetch failed:', trailsResult.reason);
+            setError('Failed to load trails. Please try again.');
+          }
+
+          if (usersResult.status === 'fulfilled') {
+            userList = (usersResult.value.data || []).map(u => ({
+              ...u,
+              _id: u._id || u.id,
+              id: u._id || u.id,
+              name: u.name || 'Trekker',
+              province: u.province || 'Nepal',
+              district: u.district || 'Unknown',
+            }));
+          } else {
+            console.error('Users fetch failed:', usersResult.reason);
+          }
         }
 
-        // Process Users
-        if (usersResult.status === 'fulfilled') {
-          const mapped = (usersResult.value.data || []).map(u => ({
-            ...u,
-            _id: u._id || u.id,
-            id: u._id || u.id,
-            name: u.name || 'Trekker',
-            province: u.province || 'Nepal',
-            district: u.district || 'Unknown'
-          }));
-          setUsers(mapped);
+        // Apply cached images instantly, then lazy-load the rest
+        const withCachedImages = trailList.map(t => {
+          try {
+            const cachedImages = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
+            if (cachedImages[t._id || t.id]) return { ...t, image: cachedImages[t._id || t.id] };
+          } catch (e) {/* ignore */}
+          return t;
+        });
+        setRecTrails(withCachedImages);
 
-          // Load friend statuses from API only if logged in
-          if (authUser) {
-            const otherIds = mapped
-              .filter(u => String(u._id) !== String(authUser._id || authUser.id))
-              .map(u => u._id);
+        if (withCachedImages.length > 0) {
+          const trailIds = withCachedImages.map(t => t._id || t.id);
+          axios.post('/api/trails/batch-images', { ids: trailIds })
+            .then(imgResp => {
+              const imagesMap = imgResp.data;
+              try {
+                const currentCache = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
+                localStorage.setItem('trail_images_cache', JSON.stringify({ ...currentCache, ...imagesMap }));
+              } catch (e) {/* ignore */}
+              setRecTrails(prev => prev.map(t => {
+                const newImage = imagesMap[String(t._id || t.id)];
+                return newImage ? { ...t, image: newImage } : t;
+              }));
+            })
+            .catch(e => console.error('Background image fetch failed', e));
+        }
 
-            // Fetch all statuses in parallel
-            const statusResults = await Promise.allSettled(
-              otherIds.map(uid =>
-                axios.get(`/api/friends/status/${uid}`).then(r => ({ uid, status: r.data.status }))
-              )
-            );
-            const statuses = {};
-            statusResults.forEach(r => {
-              if (r.status === 'fulfilled') statuses[r.value.uid] = r.value.status;
-            });
-            setFriendStatuses(statuses);
-          }
-        } else {
-          console.error('Users fetch failed:', usersResult.reason);
-          // We don't block the page if users fail, just log it
+        setCompanions(userList);
+
+        // Load friend statuses for companion list
+        if (authUser && userList.length > 0) {
+          const otherIds = userList
+            .filter(u => String(u._id) !== String(authUser._id || authUser.id))
+            .map(u => u._id);
+          const statusResults = await Promise.allSettled(
+            otherIds.map(uid =>
+              axios.get(`/api/friends/status/${uid}`).then(r => ({ uid, status: r.data.status }))
+            )
+          );
+          const statuses = {};
+          statusResults.forEach(r => {
+            if (r.status === 'fulfilled') statuses[r.value.uid] = r.value.status;
+          });
+          setFriendStatuses(statuses);
         }
 
       } catch (err) {
         console.error('Unexpected error in fetchData:', err);
         setError(err.message);
       } finally {
-        // ALWAYS turn off loading, even if errors occurred
         setIsLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [authUser]);
 
   if (isLoading) {
     return (

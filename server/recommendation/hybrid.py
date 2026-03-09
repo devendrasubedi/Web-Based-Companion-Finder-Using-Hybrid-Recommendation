@@ -1,107 +1,196 @@
 """
-Hybrid Trail Scoring — Blends all 4 signals.
-
-Weights:
-  Content (TF-IDF + rules):  45%
-  Collaborative (Item-Item): 35%
-  Social (Friends):          15%
-  Popularity:                 5%
+HYBRID RECOMMENDER — Blends CBF + CF + Social signals.
+Orchestrator: CBF scores → CF scores → alpha blend → friend boost → cache write.
 """
 
-from collections import defaultdict
-from content_based import INTEREST_TO_TAGS
+import logging
+from bson import ObjectId
 
-W_CONTENT = 0.45
-W_CF = 0.35
-W_SOCIAL = 0.15
-W_POPULARITY = 0.05
+from config import (
+    HYBRID_FRIEND_BOOST,
+    CF_ONLY_DISCOUNT,
+    BULK_WRITE_BATCH_SIZE,
+)
+from data_loader import (
+    load_trails, load_all_profiles, load_single_profile,
+    load_all_interactions, load_user_interactions,
+    load_all_relationships, build_friend_trail_sets,
+    write_cache, write_cache_bulk,
+)
+from content_based import get_cbf_scores
+from collaborative import get_cf_scores, compute_alpha
 
-
-def trail_reason(user, trail, c_score, cf_score, s_score):
-    """Why was this trail recommended?"""
-    reasons = []
-
-    if c_score > 0.4:
-        u_tags = set()
-        for interest in user.get("interests", []):
-            for tag in INTEREST_TO_TAGS.get(interest, []):
-                u_tags.add(tag.lower().replace("-", "_"))
-        t_tags = set(tag.lower().replace("-", "_") for tag in trail.get("tags", []))
-        matched = u_tags & t_tags
-        if matched:
-            reasons.append(f"Matches your interests: {', '.join(list(matched)[:3])}")
-        if user.get("province") in trail.get("location", {}).get("provinces", []):
-            reasons.append(f"In your province: {user['province']}")
-
-    if cf_score > 0.2:
-        reasons.append("Trekkers like you loved this")
-
-    if s_score > 0.1:
-        reasons.append("Your friends have trekked here")
-
-    if trail.get("rating", 0) >= 4.0:
-        reasons.append(f"Highly rated: {trail.get('rating', 0)}★")
-
-    if not reasons:
-        reasons.append(f"Good match for {user.get('experienceLevel', 'your')} level")
-
-    return ". ".join(reasons[:3])
+logger = logging.getLogger("rec.hybrid")
 
 
-def compute_hybrid_trail_scores(user, trails, content_scores,
-                                 cf_trail_scores, social_scores,
-                                 interactions, top_n=30):
-    """
-    Blend all signals for one user → ranked trail list.
-    """
-    uid = user["userId"]
-
-    # User's completed + interacted trails
-    completed = set()
-    interacted = set()
-    for inter in interactions:
-        if inter["userId"] == uid:
-            if inter.get("isCompleted"):
-                completed.add(inter["trailId"])
-            interacted.add(inter["trailId"])
-
-    # Popularity
-    trail_counts = defaultdict(int)
-    for inter in interactions:
-        trail_counts[inter["trailId"]] += 1
-    max_count = max(trail_counts.values()) if trail_counts else 1
-    popularity = {tid: c / max_count for tid, c in trail_counts.items()}
-
+def _blend_scores(cbf_scores, cf_scores, alpha, excluded, friend_trails):
+    """Blend CBF and CF. Apply friend boost. Enforce hard filters."""
+    all_trails = set(cbf_scores.keys()) | set(cf_scores.keys())
     results = []
-    for trail in trails:
-        tid = trail["_id"]
-        if tid in completed:
+
+    for tid in all_trails:
+        if tid in excluded:
             continue
 
-        c = content_scores.get(tid, 0)
-        cf = cf_trail_scores.get(tid, 0)
-        s = social_scores.get(tid, 0)
-        p = popularity.get(tid, 0)
+        cbf_score = 0.0
+        reasons = []
+        if tid in cbf_scores:
+            cbf_score, reasons = cbf_scores[tid]
 
-        hybrid = c * W_CONTENT + cf * W_CF + s * W_SOCIAL + p * W_POPULARITY
+        cf_score = cf_scores.get(tid, 0.0)
 
-        # Deprioritize already-saved (user knows about it)
-        if tid in interacted:
-            hybrid *= 0.7
+        if tid not in cbf_scores and alpha == 0:
+            continue
 
-        if hybrid > 0.05:
-            results.append({
-                "trailId": tid,
-                "name": trail.get("name", ""),
-                "score": round(hybrid, 4),
-                "reason": trail_reason(user, trail, c, cf, s),
-                "contentScore": round(c, 3),
-                "cfScore": round(cf, 3),
-                "socialScore": round(s, 3),
-                "difficulty": trail.get("difficulty", ""),
-                "rating": trail.get("rating", 0),
-                "distance_km": trail.get("distance_km", 0)
-            })
+        if alpha == 0:
+            final = cbf_score
+        elif cbf_score > 0 and cf_score > 0:
+            final = (1 - alpha) * cbf_score + alpha * cf_score
+        elif cbf_score > 0:
+            final = cbf_score
+        elif cf_score > 0:
+            final = alpha * cf_score * CF_ONLY_DISCOUNT
+        else:
+            continue
+
+        friend_boosted = False
+        if friend_trails and tid in friend_trails:
+            final = min(1.0, final + HYBRID_FRIEND_BOOST)
+            friend_boosted = True
+
+        reason_parts = list(reasons)
+        if cf_score > 0.3:
+            reason_parts.append("recommended by similar trekkers")
+        if friend_boosted:
+            reason_parts.append("saved by your friends")
+
+        results.append({
+            "itemId": str(tid),
+            "score": round(final, 4),
+            "reason": " · ".join(reason_parts) if reason_parts else "",
+        })
 
     results.sort(key=lambda x: x["score"], reverse=True)
-    return results[:top_n]
+    return results[:50]
+
+
+def _model_version(alpha):
+    if alpha == 0:
+        return "cbf-v1.0"
+    elif alpha <= 0.3:
+        return "hybrid-cbf-dominant-v1.0"
+    elif alpha <= 0.5:
+        return "hybrid-balanced-v1.0"
+    else:
+        return "hybrid-cf-dominant-v1.0"
+
+
+def compute_for_user(user_id, all_interactions=None, friends_map=None,
+                     blocked_map=None, friend_trail_sets=None):
+    """Compute and cache recommendations for one user."""
+    uid_str = str(user_id)
+
+    profile = load_single_profile(user_id)
+    if not profile:
+        logger.warning(f"No profile for {uid_str}, skipping")
+        return False
+
+    trails = load_trails()
+    if not trails:
+        logger.error("No trails loaded")
+        return False
+
+    if all_interactions is not None:
+        excluded = set(all_interactions.get(uid_str, {}).keys())
+        interaction_count = len(excluded)
+    else:
+        all_interactions, all_excluded = load_all_interactions()
+        excluded = all_excluded.get(uid_str, set())
+        interaction_count = len(all_interactions.get(uid_str, {}))
+
+    if friends_map is None or blocked_map is None:
+        friends_map, blocked_map = load_all_relationships()
+
+    if friend_trail_sets is None:
+        friend_trail_sets = build_friend_trail_sets(friends_map, all_interactions)
+
+    cbf_scores = get_cbf_scores(profile, trails)
+
+    alpha = compute_alpha(interaction_count)
+    cf_scores = {}
+    if alpha > 0:
+        cf_scores = get_cf_scores(uid_str, all_interactions, friends_map, blocked_map)
+
+    friend_trails = friend_trail_sets.get(uid_str, set())
+    recommendations = _blend_scores(cbf_scores, cf_scores, alpha, excluded, friend_trails)
+
+    if not recommendations:
+        logger.warning(f"No recs for {uid_str}")
+        return False
+
+    model = _model_version(alpha)
+    uid_obj = ObjectId(user_id) if isinstance(user_id, str) else user_id
+    write_cache(uid_obj, "trails", recommendations, model)
+    logger.info(f"Cached {len(recommendations)} recs for {uid_str} (alpha={alpha})")
+    return True
+
+
+def compute_for_all():
+    """Recompute for ALL users. Called by cron every 6 hours."""
+    logger.info("=" * 60)
+    logger.info("BULK RECOMPUTATION STARTED")
+    logger.info("=" * 60)
+
+    trails = load_trails()
+    profiles = load_all_profiles()
+    all_interactions, all_excluded = load_all_interactions()
+    friends_map, blocked_map = load_all_relationships()
+    friend_trail_sets = build_friend_trail_sets(friends_map, all_interactions)
+
+    logger.info(
+        f"Data loaded: {len(trails)} trails, {len(profiles)} profiles, "
+        f"{len(all_interactions)} users with interactions"
+    )
+
+    processed = 0
+    skipped = 0
+    cache_batch = []
+
+    for i, profile in enumerate(profiles):
+        uid = profile.get("userId")
+        if not uid:
+            skipped += 1
+            continue
+
+        uid_str = str(uid)
+
+        cbf_scores = get_cbf_scores(profile, trails)
+
+        interaction_count = len(all_interactions.get(uid_str, {}))
+        alpha = compute_alpha(interaction_count)
+        cf_scores = {}
+        if alpha > 0:
+            cf_scores = get_cf_scores(uid_str, all_interactions, friends_map, blocked_map)
+
+        excluded = all_excluded.get(uid_str, set())
+        friend_trails = friend_trail_sets.get(uid_str, set())
+        recs = _blend_scores(cbf_scores, cf_scores, alpha, excluded, friend_trails)
+
+        if recs:
+            cache_batch.append((uid, "trails", recs, _model_version(alpha)))
+            processed += 1
+        else:
+            skipped += 1
+
+        if len(cache_batch) >= BULK_WRITE_BATCH_SIZE:
+            write_cache_bulk(cache_batch)
+            cache_batch = []
+
+        if (i + 1) % 500 == 0:
+            logger.info(f"  Progress: {i+1}/{len(profiles)}")
+
+    if cache_batch:
+        write_cache_bulk(cache_batch)
+
+    logger.info(f"BULK COMPLETE: {processed} processed, {skipped} skipped")
+    return {"processed": processed, "skipped": skipped, "total": len(profiles)}

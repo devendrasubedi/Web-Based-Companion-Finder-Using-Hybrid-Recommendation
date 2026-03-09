@@ -1,165 +1,219 @@
 """
-Content-Based Filtering for TRAIL recommendations.
-
-How it works:
-  1. Convert each user profile into a text document
-     - interests expanded via INTEREST_TO_TAGS mapping
-     - add province, experience level, budget level
-  2. Convert each trail into a text document
-     - tags, provinces, difficulty, type
-  3. Fit TF-IDF on ALL documents (users + trails) in same vector space
-  4. Cosine similarity between user vector and trail vector
-  5. Add rule-based signals: location, difficulty, budget, duration
-
-Scores:
-  TF-IDF cosine:    35%  (ML — handles vocabulary mismatch)
-  Location match:   25%  (rule — geographic preference)
-  Difficulty fit:   20%  (rule — safety/feasibility)
-  Budget fit:       10%  (rule — affordability)
-  Duration fit:     10%  (rule — practical constraint)
+CONTENT-BASED FILTERING — 6 signals, weighted sum.
+Scores each trail for a user based on profile features.
+Cold-start safe — works from day one without behavior data.
 """
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import math
+import logging
+from datetime import datetime
 
-# ── Vocabulary Expansion ──
-# User says "adventure", trail says "high-altitude challenging"
-# This mapping bridges that gap BEFORE TF-IDF sees the text
+from config import (
+    CBF_WEIGHTS,
+    INTEREST_TAGS,
+    FITNESS_CEILING,
+    DIFFICULTY_RANK,
+    MAX_DIFFICULTY_SCORE,
+    AGE_PENALTY,
+    BUDGET_CEILING,
+    BUDGET_DECAY_RATE,
+    AVAILABILITY_MAX_DAYS,
+    GEO_SCORES,
+    GEO_TRAVEL_AFFINITY,
+    GLOBAL_MEAN_RATING,
+    MIN_VOTES_THRESHOLD,
+)
 
-INTEREST_TO_TAGS = {
-    "adventure": ["high-altitude", "challenging", "remote", "camping", "offbeat",
-                  "glacier", "high_passes", "snow_trekking", "rock_climbing"],
-    "cultural":  ["heritage", "pilgrimage", "cultural", "traditional_villages",
-                  "monasteries", "cultural_heritage", "village_exploration"],
-    "nature":    ["scenic", "wildlife", "photography", "lakes", "waterfalls",
-                  "forests", "mountain_views", "forest_trails", "bird_watching",
-                  "sunrise_views", "botanical"],
-    "comfort":   ["tea-house", "easy", "family-friendly", "short-trek",
-                  "teahouse_trekking", "nature_walk", "hot_springs"],
-    "spiritual": ["pilgrimage", "meditation", "religious", "peace",
-                  "cultural_heritage"]
-}
-
-DIFFICULTY_MAP = {"Easy": 1, "Moderate": 2, "Difficult": 3}
-EXP_MAP = {"Beginner": 1, "Intermediate": 2, "Advanced": 3, "Expert": 4}
+logger = logging.getLogger("rec.cbf")
 
 
-def _user_to_text(user):
-    """Convert user profile → text document for TF-IDF"""
-    words = []
-    for interest in user.get("interests", []):
-        words.append(interest)
-        words.extend(INTEREST_TO_TAGS.get(interest, []))
-    words.append(user.get("province", ""))
-    words.append(user.get("experienceLevel", ""))
-    words.append(user.get("budgetLevel", ""))
-    words.append(user.get("availability", ""))
-    words.extend(user.get("languagesKnown", []))
-    return " ".join(w.lower().replace("-", "_") for w in words if w)
+# ── Signal 1: Interest Match (Jaccard per category) ─────────
+
+def _interest_match(user_interests, trail_tags):
+    """Per-category Jaccard. Averages across user's interest categories."""
+    if not user_interests or not trail_tags:
+        return 0.0
+
+    trail_tags_lower = {t.lower() for t in trail_tags}
+    cat_scores = []
+
+    for interest in user_interests:
+        mapped = INTEREST_TAGS.get(interest, set())
+        if not mapped:
+            continue
+        hits = len(mapped & trail_tags_lower)
+        cat_scores.append(hits / len(mapped))
+
+    if not cat_scores:
+        return 0.0
+    return sum(cat_scores) / len(cat_scores)
 
 
-def _trail_to_text(trail):
-    """Convert trail features → text document for TF-IDF"""
-    words = list(trail.get("tags", []))
-    words.extend(trail.get("location", {}).get("provinces", []))
-    words.append(trail.get("difficulty", ""))
-    words.append(trail.get("type", ""))
-    return " ".join(w.lower().replace("-", "_") for w in words if w)
+# ── Signal 2: Difficulty Match ───────────────────────────────
+
+def _get_age(dob):
+    if not dob:
+        return 30
+    today = datetime.utcnow()
+    age = today.year - dob.year
+    if (today.month, today.day) < (dob.month, dob.day):
+        age -= 1
+    return age
 
 
-class ContentScorer:
-    """
-    Builds TF-IDF vectors for ALL users and trails,
-    then scores any (user, trail) pair.
-    """
+def _age_penalty(dob):
+    """Age modifier on difficulty. Not a separate signal."""
+    age = _get_age(dob)
+    if age < 40:
+        return AGE_PENALTY["under_40"]
+    elif age <= 55:
+        return AGE_PENALTY["40_to_55"]
+    else:
+        return AGE_PENALTY["over_55"]
 
-    def __init__(self, profiles, trails):
-        self.profiles = profiles
-        self.trails = trails
-        self._build_tfidf()
 
-    def _build_tfidf(self):
-        """Build TF-IDF matrix — users and trails in SAME vector space"""
-        user_docs = [_user_to_text(u) for u in self.profiles]
-        trail_docs = [_trail_to_text(t) for t in self.trails]
+def _difficulty_match(fitness_level, trail_difficulty, trail_score, dob):
+    """Hard filter if too difficult. Then rank by score."""
+    ceiling = FITNESS_CEILING.get(fitness_level, 2)
+    rank = DIFFICULTY_RANK.get(trail_difficulty, 2)
 
-        self.vectorizer = TfidfVectorizer(
-            token_pattern=r'[a-z_]+',
-            max_features=500,
-            sublinear_tf=True
-        )
+    if rank > ceiling:
+        return 0.0
 
-        all_docs = user_docs + trail_docs
-        tfidf_matrix = self.vectorizer.fit_transform(all_docs)
+    normalized = min(max((trail_score or 0) / MAX_DIFFICULTY_SCORE, 0.0), 1.0)
+    penalty = _age_penalty(dob)
 
-        n_users = len(self.profiles)
-        self.user_vectors = tfidf_matrix[:n_users]
-        self.trail_vectors = tfidf_matrix[n_users:]
+    if fitness_level in ("advanced", "expert"):
+        return max(0.0, normalized - penalty)
+    else:
+        return max(0.0, 1.0 - normalized - penalty)
 
-        self.user_idx = {p["userId"]: i for i, p in enumerate(self.profiles)}
-        self.trail_idx = {t["_id"]: i for i, t in enumerate(self.trails)}
 
-    def tfidf_score(self, user_id, trail_id):
-        """Cosine similarity between user and trail TF-IDF vectors"""
-        if user_id not in self.user_idx or trail_id not in self.trail_idx:
-            return 0.0
-        u_vec = self.user_vectors[self.user_idx[user_id]]
-        t_vec = self.trail_vectors[self.trail_idx[trail_id]]
-        return float(max(cosine_similarity(u_vec, t_vec)[0][0], 0.0))
+# ── Signal 3: Budget Match ───────────────────────────────────
 
-    def rule_scores(self, user, trail):
-        """Domain-specific signals that TF-IDF can't capture"""
-        scores = {}
+def _budget_match(budget_level, trail_max_cost):
+    """Soft exponential decay above ceiling. Never hard zero."""
+    ceiling = BUDGET_CEILING.get(budget_level, 40000)
+    cost = trail_max_cost or 0
 
-        # Location (0–1)
-        t_provs = trail.get("location", {}).get("provinces", [])
-        scores["location"] = 1.0 if user.get("province") in t_provs else 0.1
+    if cost <= ceiling:
+        return 1.0
 
-        # Difficulty fit (0–1)
-        t_diff = DIFFICULTY_MAP.get(trail.get("difficulty", "Easy"), 1)
-        u_exp = EXP_MAP.get(user.get("experienceLevel", "Beginner"), 1)
-        diff_gap = abs(t_diff - (u_exp * 0.75))
-        if diff_gap <= 0.5: scores["difficulty"] = 1.0
-        elif diff_gap <= 1.0: scores["difficulty"] = 0.6
-        elif diff_gap <= 1.5: scores["difficulty"] = 0.25
-        else: scores["difficulty"] = 0.1
+    overage = (cost - ceiling) / max(ceiling, 1)
+    return max(0.0, math.exp(-BUDGET_DECAY_RATE * overage))
 
-        # Budget (0–1)
-        t_cost = trail.get("cost", {}).get("min_npr") or 0
-        u_budget = user.get("budget", {}).get("max") or 50000
-        if t_cost <= u_budget: scores["budget"] = 1.0
-        elif t_cost <= u_budget * 1.5: scores["budget"] = 0.4
-        else: scores["budget"] = 0.1
 
-        # Duration (0–1)
-        t_days = trail.get("duration", {}).get("min_days") or 3
-        u_exp_val = EXP_MAP.get(user.get("experienceLevel", "Beginner"), 1)
-        if u_exp_val <= 1 and t_days <= 5: scores["duration"] = 1.0
-        elif u_exp_val == 2 and 3 <= t_days <= 14: scores["duration"] = 1.0
-        elif u_exp_val >= 3 and t_days >= 5: scores["duration"] = 1.0
-        elif t_days <= 7: scores["duration"] = 0.4
-        else: scores["duration"] = 0.1
+# ── Signal 4: Availability Match ─────────────────────────────
 
-        return scores
+def _availability_match(availability, trail_min_days):
+    """Hard filter if trail too long for user's availability."""
+    max_days = AVAILABILITY_MAX_DAYS.get(availability, 999)
+    min_days = trail_min_days or 1
 
-    def score(self, user, trail):
-        """
-        Final content score for one (user, trail) pair.
-        Returns (total_score, tfidf_score, rule_scores_dict)
-        """
-        tfidf = self.tfidf_score(user["userId"], trail["_id"])
-        rules = self.rule_scores(user, trail)
+    if min_days > max_days:
+        return 0.0
+    return 1.0
 
-        total = (
-            tfidf * 0.35 +
-            rules["location"] * 0.25 +
-            rules["difficulty"] * 0.20 +
-            rules["budget"] * 0.10 +
-            rules["duration"] * 0.10
-        )
 
-        return min(total, 1.0), tfidf, rules
+# ── Signal 5: Geo Affinity ───────────────────────────────────
 
-    def score_all_trails(self, user):
-        """Score ALL trails for one user → { trail_id: score }"""
-        return {t["_id"]: self.score(user, t)[0] for t in self.trails}
+def _geo_affinity(user_province, user_district, trail_location):
+    """Tiered match. Never returns 0."""
+    if not trail_location:
+        return GEO_SCORES["fallback"]
+
+    t_provinces = trail_location.get("provinces", [])
+    t_districts = trail_location.get("districts", [])
+
+    if user_district and user_district in t_districts:
+        return GEO_SCORES["district_match"]
+
+    if user_province and user_province in t_provinces:
+        return GEO_SCORES["province_match"]
+
+    nearby = GEO_TRAVEL_AFFINITY.get(user_province, set())
+    if any(p in nearby for p in t_provinces):
+        return GEO_SCORES["neighbor_province"]
+
+    return GEO_SCORES["fallback"]
+
+
+# ── Signal 6: Popularity Prior ────────────────────────────────
+
+def _popularity_prior(trail_rating, trail_num_reviews):
+    """Bayesian average. Smooths low-review trails."""
+    rating = trail_rating or 0
+    num = trail_num_reviews or 0
+
+    bayesian = (
+        (MIN_VOTES_THRESHOLD * GLOBAL_MEAN_RATING + num * rating) /
+        (MIN_VOTES_THRESHOLD + num)
+    )
+    return max(0.0, min(1.0, (bayesian - 1.0) / 4.0))
+
+
+# ── Main Scorer ──────────────────────────────────────────────
+
+def score_trail(profile, trail):
+    """Compute CBF score for one trail given one user profile."""
+    reasons = []
+
+    interests = profile.get("interests", [])
+    fitness = profile.get("experienceLevel", "beginner")
+    budget_level = profile.get("budgetLevel", "Medium")
+    availability = profile.get("availability", "Flexible")
+    province = profile.get("province", "")
+    district = profile.get("district", "")
+    dob = profile.get("dob")
+
+    trail_tags = trail.get("tags", [])
+    trail_diff = trail.get("difficulty", "Moderate")
+    trail_dscore = trail.get("difficultyScore", 0)
+    trail_cost_max = (trail.get("cost") or {}).get("max_npr", 0)
+    trail_min_days = (trail.get("duration") or {}).get("min_days", 1)
+    trail_location = trail.get("location", {})
+    trail_rating = trail.get("rating", 0)
+    trail_num_reviews = trail.get("numReviews", 0)
+
+    s_interest = _interest_match(interests, trail_tags)
+    s_difficulty = _difficulty_match(fitness, trail_diff, trail_dscore, dob)
+    s_budget = _budget_match(budget_level, trail_cost_max)
+    s_availability = _availability_match(availability, trail_min_days)
+    s_geo = _geo_affinity(province, district, trail_location)
+    s_popularity = _popularity_prior(trail_rating, trail_num_reviews)
+
+    if s_difficulty == 0.0 or s_availability == 0.0:
+        return 0.0, []
+
+    score = (
+        CBF_WEIGHTS["interest"]     * s_interest +
+        CBF_WEIGHTS["difficulty"]   * s_difficulty +
+        CBF_WEIGHTS["budget"]       * s_budget +
+        CBF_WEIGHTS["availability"] * s_availability +
+        CBF_WEIGHTS["geo"]          * s_geo +
+        CBF_WEIGHTS["popularity"]   * s_popularity
+    )
+
+    if s_interest > 0.1:
+        matched = [i for i in interests if i in INTEREST_TAGS]
+        if matched:
+            reasons.append(f"Matches your {', '.join(matched)} interests")
+
+    reasons.append(f"{trail_diff.lower()} difficulty")
+
+    t_provs = trail_location.get("provinces", [])
+    if t_provs:
+        reasons.append(f"located in {t_provs[0]}")
+
+    return score, reasons
+
+
+def get_cbf_scores(profile, trails):
+    """Score ALL trails for one user. Returns {trailId: (score, reasons)}."""
+    scores = {}
+    for trail in trails:
+        tid = trail["_id"]
+        score, reasons = score_trail(profile, trail)
+        if score > 0:
+            scores[tid] = (score, reasons)
+    return scores

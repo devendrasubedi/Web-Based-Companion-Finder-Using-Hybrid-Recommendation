@@ -1,6 +1,6 @@
-fastapi
-uvicorn
-pymongo
-numpy
-scipy
-scikit-learn
+fastapi==0.115.0
+uvicorn==0.30.6
+pymongo==4.8.0
+dnspython==2.6.1
+apscheduler==3.10.4
+python-dotenv==1.0.1

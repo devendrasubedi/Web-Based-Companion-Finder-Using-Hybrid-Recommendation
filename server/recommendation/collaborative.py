@@ -1,123 +1,155 @@
 """
-Collaborative Filtering — Two Separate Outputs
-
-1. Trail CF (Item-Item):
-   - Build user-item matrix from implicitScores
-   - Compute item-item cosine similarity
-   - Predict scores for unseen trails
-   - "Users who liked Trail A also liked Trail B"
-
-2. Companion CF (User-User):
-   - Same user-item matrix
-   - Compute user-user cosine similarity
-   - Find behaviorally similar users
-   - "This user saves/completes the same trails as you"
+COLLABORATIVE FILTERING — Graph-Enhanced User-User KNN + IDF.
+Feature-blind — only sees who interacted with what trail.
+Finds similar users via cosine similarity, recommends their trails.
 """
 
-import numpy as np
-from scipy.sparse import csr_matrix
-from sklearn.metrics.pairwise import cosine_similarity
+import math
+import logging
+from collections import defaultdict
+
+from config import (
+    CF_K_NEIGHBORS,
+    CF_MIN_COMMON_TRAILS,
+    CF_FRIEND_BOOST,
+    CF_FOF_BOOST,
+    ALPHA_THRESHOLDS,
+)
+
+logger = logging.getLogger("rec.cf")
 
 
-def build_matrices(interactions, trails, profiles):
-    """
-    Build sparse user-item matrix from interactions.
-    Returns the matrix + index maps.
-    """
-    trail_ids = [t["_id"] for t in trails]
-    user_ids = [p["userId"] for p in profiles]
-    trail_idx = {tid: i for i, tid in enumerate(trail_ids)}
-    user_idx = {uid: i for i, uid in enumerate(user_ids)}
-
-    n_users = len(user_ids)
-    n_trails = len(trail_ids)
-
-    rows, cols, vals = [], [], []
-    for inter in interactions:
-        uid = inter["userId"]
-        tid = inter["trailId"]
-        if uid in user_idx and tid in trail_idx:
-            rows.append(user_idx[uid])
-            cols.append(trail_idx[tid])
-            vals.append(inter.get("implicitScore", 1))
-
-    if not rows:
-        return None, user_ids, trail_ids, user_idx, trail_idx
-
-    matrix = csr_matrix((vals, (rows, cols)), shape=(n_users, n_trails))
-    return matrix, user_ids, trail_ids, user_idx, trail_idx
-
-
-def trail_cf_scores(user_item, target_uid, user_ids, trail_ids, user_idx, trail_idx):
-    """
-    Item-Item CF for trail recommendations.
-
-    How it works:
-      1. Compute trail-trail cosine similarity (item_sim matrix)
-      2. For target user, get their interacted trails
-      3. For each UNSEEN trail, predict score:
-         score = Σ sim(unseen_trail, interacted_trail) × user_rating
-                 ─────────────────────────────────────────────────────
-                              Σ |sim|
-
-    Returns: { trail_id: predicted_score (0–1) }
-    """
-    if user_item is None or target_uid not in user_idx:
+def _compute_idf(interactions_by_user):
+    """IDF = log(total_users / users_per_trail). Rare trails → high weight."""
+    n_users = len(interactions_by_user)
+    if n_users == 0:
         return {}
 
-    # Item-item similarity: how similar are trails based on who liked them
-    item_sim = cosine_similarity(user_item.T)  # n_trails × n_trails
+    doc_freq = defaultdict(int)
+    for user_trails in interactions_by_user.values():
+        for tid in user_trails:
+            doc_freq[tid] += 1
 
-    uidx = user_idx[target_uid]
-    user_row = user_item[uidx].toarray().flatten()
-    interacted = np.where(user_row > 0)[0]
+    return {tid: math.log(n_users / max(df, 1)) for tid, df in doc_freq.items()}
 
-    if len(interacted) == 0:
+
+def _cosine_similarity(vec_a, vec_b, idf, common_trails):
+    """IDF-weighted cosine between two users over shared trails."""
+    if len(common_trails) < CF_MIN_COMMON_TRAILS:
+        return 0.0
+
+    dot = 0.0
+    norm_a = 0.0
+    norm_b = 0.0
+
+    for tid in common_trails:
+        w = idf.get(tid, 1.0)
+        a_val = vec_a[tid] * w
+        b_val = vec_b[tid] * w
+        dot += a_val * b_val
+        norm_a += a_val * a_val
+        norm_b += b_val * b_val
+
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (math.sqrt(norm_a) * math.sqrt(norm_b))
+
+
+def _find_neighbors(target_uid, target_vec, interactions_by_user,
+                    idf, friends_map, blocked_map):
+    """
+    Find K nearest neighbors with graph enhancement.
+    Friends: +0.15. FoF: +0.07. Blocked: excluded.
+    """
+    if not target_vec:
+        return []
+
+    target_trails = set(target_vec.keys())
+    blocked = blocked_map.get(target_uid, set())
+    friends = friends_map.get(target_uid, set())
+
+    # Friends of friends
+    fof = set()
+    for fid in friends:
+        fof.update(friends_map.get(fid, set()))
+    fof -= friends
+    fof.discard(target_uid)
+
+    candidates = []
+
+    for uid, user_vec in interactions_by_user.items():
+        if uid == target_uid:
+            continue
+        if uid in blocked:
+            continue
+
+        common = target_trails & set(user_vec.keys())
+        sim = _cosine_similarity(target_vec, user_vec, idf, common)
+        if sim <= 0:
+            continue
+
+        if uid in friends:
+            sim += CF_FRIEND_BOOST
+        elif uid in fof:
+            sim += CF_FOF_BOOST
+
+        candidates.append((uid, sim))
+
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    return candidates[:CF_K_NEIGHBORS]
+
+
+def get_cf_scores(target_uid, interactions_by_user, friends_map, blocked_map):
+    """
+    CF trail scores for one user.
+    Weighted average of neighbor scores for unseen trails. Normalized 0–1.
+    """
+    target_vec = interactions_by_user.get(target_uid, {})
+    if not target_vec:
         return {}
 
-    scores = {}
-    for tidx in range(len(trail_ids)):
-        if user_row[tidx] > 0:
-            continue  # skip already interacted
+    idf = _compute_idf(interactions_by_user)
+    neighbors = _find_neighbors(
+        target_uid, target_vec, interactions_by_user,
+        idf, friends_map, blocked_map
+    )
 
-        sims = item_sim[tidx, interacted]
-        ratings = user_row[interacted]
-        denom = np.sum(np.abs(sims))
-
-        if denom > 0:
-            pred = np.dot(sims, ratings) / denom
-            # Normalize to 0–1 (max implicitScore = 13)
-            scores[trail_ids[tidx]] = min(max(pred / 13.0, 0), 1.0)
-
-    return scores
-
-
-def companion_cf_scores(user_item, target_uid, user_ids, user_idx, top_n=60):
-    """
-    User-User CF for companion recommendations.
-
-    How it works:
-      1. Compute user-user cosine similarity
-         (users who saved/completed/rated same trails get high similarity)
-      2. Return top N most similar users with their similarity scores
-
-    Returns: { other_user_id: similarity_score (0–1) }
-    """
-    if user_item is None or target_uid not in user_idx:
+    if not neighbors:
         return {}
 
-    # User-user similarity: how similar are users based on trail interactions
-    user_sim = cosine_similarity(user_item)  # n_users × n_users
+    already_seen = set(target_vec.keys())
 
-    uidx = user_idx[target_uid]
-    sims = user_sim[uidx]
+    trail_scores = defaultdict(float)
+    trail_weights = defaultdict(float)
 
-    # Get top similar users (exclude self)
-    top_indices = np.argsort(sims)[::-1][1:top_n * 3]
+    for neighbor_uid, similarity in neighbors:
+        neighbor_vec = interactions_by_user.get(neighbor_uid, {})
+        for tid, n_score in neighbor_vec.items():
+            if tid in already_seen:
+                continue
+            trail_scores[tid] += similarity * n_score
+            trail_weights[tid] += similarity
 
-    scores = {}
-    for j in top_indices:
-        if sims[j] > 0.01:
-            scores[user_ids[j]] = float(sims[j])
+    raw_scores = {}
+    for tid in trail_scores:
+        if trail_weights[tid] > 0:
+            raw_scores[tid] = trail_scores[tid] / trail_weights[tid]
 
-    return scores
+    if not raw_scores:
+        return {}
+
+    max_score = max(raw_scores.values())
+    if max_score <= 0:
+        return {}
+
+    cf_scores = {tid: score / max_score for tid, score in raw_scores.items()}
+    logger.debug(f"CF for {target_uid}: {len(neighbors)} neighbors, {len(cf_scores)} scores")
+    return cf_scores
+
+
+def compute_alpha(interaction_count):
+    """CF weight based on interaction count. More interactions → trust CF more."""
+    for threshold, alpha in ALPHA_THRESHOLDS:
+        if interaction_count <= threshold:
+            return alpha
+    return ALPHA_THRESHOLDS[-1][1]
