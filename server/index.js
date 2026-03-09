@@ -13,6 +13,7 @@ import trailRoutes from './routes/trailRoutes.js'
 import chatRoutes from './routes/chat.route.js'
 import friendRoutes from './routes/friend.route.js'
 import { initializeSocket } from './socket/socketHandler.js';
+import recommendationRoutes from './routes/recommendation.route.js'
 
 dotenv.config();
 const app = express();
@@ -42,9 +43,11 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/trails", trailRoutes);
 app.use("/api/chat", chatRoutes);
-console.log('✓ Chat routes mounted at /api/chat');
+console.log('Chat routes mounted at /api/chat');
 app.use("/api/friends", friendRoutes);
-console.log('✓ Friend routes mounted at /api/friends');
+console.log('Friend routes mounted at /api/friends');
+app.use("/api/recommendations", recommendationRoutes);
+console.log('Recommendation routes mounted at /api/recommendations');
 
 // app.listen(PORT, () => {
 //   connectDB()

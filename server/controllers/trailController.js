@@ -1,5 +1,6 @@
 
 import { Trail, TrailGeoJSON } from '../models/trailModel.js';
+import { UserTrailInteraction } from '../models/user_trail_interaction.js';
 import path from 'path';
 import fs from 'fs';
 import mongoose from 'mongoose';
@@ -432,14 +433,25 @@ export const addReview = async (req, res) => {
         trail.reviews.push(review);
         trail.numReviews = trail.reviews.length;
 
-        // Calculate average rating
+        // Calculate average rating rounded to 1 decimal place
         trail.rating = trail.reviews.length > 0
-            ? trail.reviews.reduce((acc, item) => acc + (item.rating || 0), 0) / trail.reviews.length
+            ? Math.round((trail.reviews.reduce((acc, item) => acc + (item.rating || 0), 0) / trail.reviews.length) * 10) / 10
             : 0;
 
         // Mark reviews as modified for Mongoose
         trail.markModified('reviews');
         await trail.save({ validateBeforeSave: false });
+
+        // Also store the rating in UserTrailInteraction
+        try {
+            let interaction = await UserTrailInteraction.findOne({ userId, trailId: req.params.id });
+            if (!interaction) interaction = new UserTrailInteraction({ userId, trailId: req.params.id });
+            interaction.rating = Number(rating);
+            interaction.implicitScore = (interaction.isSaved ? 3 : 0) + (interaction.isCompleted ? 5 : 0) + Number(rating);
+            await interaction.save();
+        } catch (interactionErr) {
+            console.error('Error saving rating to UserTrailInteraction:', interactionErr);
+        }
 
         res.status(201).json({ message: 'Review added', reviews: trail.reviews, rating: trail.rating, numReviews: trail.numReviews });
     } catch (error) {
