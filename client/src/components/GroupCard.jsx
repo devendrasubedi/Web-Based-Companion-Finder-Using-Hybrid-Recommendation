@@ -1,14 +1,24 @@
 import React, { useState } from 'react';
-import { MapPin, Calendar, Users, Zap, Clock, UserCheck } from 'lucide-react';
+import { MapPin, Calendar, Users, Zap, Clock, UserCheck, MessageCircle } from 'lucide-react';
 
-const GroupCard = ({ group, onJoin, onViewDetails }) => {
+const GroupCard = ({ group, onJoin, onViewDetails, onOpenChat, isMember }) => {
   const [hasJoined, setHasJoined] = useState(false);
   
-  // Handle both old and new data structures
-  const isFull = (group.members || group.membersCount || 0) >= (group.maxMembers || 0);
-  const memberCount = group.members || group.membersCount || 0;
+  // Handle both array (from API) and number formats for members
+  const memberCount = Array.isArray(group.members)
+    ? group.members.length
+    : (group.memberCount || group.membersCount || group.members || 0);
   const maxMembers = group.maxMembers || 10;
+  const isFull = memberCount >= maxMembers;
   const spotsLeft = maxMembers - memberCount;
+
+  // Trail name: API returns trailName, fallback to trail
+  const trailName = group.trailName || group.trail || 'Unknown Trail';
+
+  // Creator name from populated creator object or direct fields
+  const creatorName = (typeof group.creator === 'object' && group.creator?.name)
+    ? group.creator.name
+    : (group.creatorName || group.createdBy || '');
 
   const difficultyColors = {
     'Easy': 'text-green-600 bg-green-50',
@@ -22,7 +32,7 @@ const GroupCard = ({ group, onJoin, onViewDetails }) => {
   const handleJoinGroup = () => {
     if (!isFull) {
       setHasJoined(!hasJoined);
-      if (onJoin) onJoin(group.id);
+      if (onJoin) onJoin(group._id || group.id);
     }
   };
 
@@ -36,29 +46,24 @@ const GroupCard = ({ group, onJoin, onViewDetails }) => {
             alt={group.name}
             className="w-full h-full object-cover"
           />
-          {group.difficulty && (
-            <div className="absolute top-3 right-3">
-              <span className={`px-3 py-1 rounded-full text-xs font-bold ${difficultyColors[group.difficulty] || 'text-gray-600 bg-gray-100'}`}>
-                {group.difficulty}
-              </span>
-            </div>
-          )}
+        </div>
+      )}
+
+      {/* Difficulty Badge (always shown at top of card body) */}
+      {group.difficulty && (
+        <div className="px-5 pt-4 pb-0">
+          <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${difficultyColors[group.difficulty] || 'text-gray-600 bg-gray-100'}`}>
+            {group.difficulty}
+          </span>
         </div>
       )}
 
       <div className="p-5">
         {/* Creator Info */}
-        {(group.creatorImage || group.createdBy) && (
+        {creatorName && (
           <div className="flex items-center gap-2 mb-3">
-            {group.creatorImage && (
-              <img
-                src={group.creatorImage}
-                alt={group.creatorName || group.createdBy}
-                className="w-8 h-8 rounded-full object-cover"
-              />
-            )}
             <div className="text-sm">
-              <p className="text-gray-700 font-medium">Organized by {group.creatorName || group.createdBy}</p>
+              <p className="text-gray-700 font-medium">Organized by {creatorName}</p>
             </div>
           </div>
         )}
@@ -69,7 +74,7 @@ const GroupCard = ({ group, onJoin, onViewDetails }) => {
         {/* Trail */}
         <div className="flex items-center gap-2 mb-2">
           <MapPin size={16} className="text-blue-600 flex-shrink-0" />
-          <p className="text-sm text-gray-700 font-medium">{group.trail}</p>
+          <p className="text-sm text-gray-700 font-medium">{trailName}</p>
         </div>
 
         {/* Trek Date */}
@@ -117,28 +122,25 @@ const GroupCard = ({ group, onJoin, onViewDetails }) => {
               </span>
             )}
           </div>
-          {group.members_info && group.members_info.length > 0 && (
-            <div className="mt-2 flex items-center gap-1 flex-wrap">
-              <span className="text-xs text-gray-600">Members:</span>
-              {group.members_info.slice(0, 3).map((member, idx) => (
-                <span key={idx} className="text-xs bg-white text-gray-700 px-2 py-1 rounded">
-                  {member.name}
-                </span>
-              ))}
-              {group.members_info.length > 3 && (
-                <span className="text-xs text-gray-500">+{group.members_info.length - 3} more</span>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Buttons */}
         <div className="flex gap-2">
-          {onJoin ? (
+          {isMember ? (
+            /* Member view: Show "Open in Chat" button */
+            <button
+              onClick={() => onOpenChat && onOpenChat(group.conversationId)}
+              className="flex-1 flex items-center justify-center gap-2 font-medium py-2.5 rounded-lg transition bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-sm hover:shadow-md"
+            >
+              <MessageCircle size={16} />
+              Open in Chat
+            </button>
+          ) : (
+            /* Browse view: Show "Join Group" button */
             <button
               onClick={handleJoinGroup}
               disabled={isFull}
-              className={`flex-1 flex items-center justify-center gap-2 font-medium py-2 rounded-lg transition ${
+              className={`flex-1 flex items-center justify-center gap-2 font-medium py-2.5 rounded-lg transition ${
                 hasJoined
                   ? 'bg-green-100 text-green-700 hover:bg-green-200'
                   : isFull
@@ -160,12 +162,7 @@ const GroupCard = ({ group, onJoin, onViewDetails }) => {
                 </>
               )}
             </button>
-          ) : null}
-          <button 
-            onClick={() => onViewDetails && onViewDetails(group.id)}
-            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-2 rounded-lg transition">
-            View Details
-          </button>
+          )}
         </div>
       </div>
     </div>

@@ -224,3 +224,44 @@ export const toggleCompletedHike = async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };
+
+// ── GET /api/users/suggested-friends ────────────────────────────────────────
+// Fetch users for suggested friends (placeholder for recommendation engine)
+export const getSuggestedFriends = async (req, res) => {
+    try {
+        const currentUserId = req.userId;
+        const { limit = 10 } = req.query;
+
+        // Fetch users excluding the current user
+        const users = await User.find({ _id: { $ne: currentUserId } })
+            .select("_id name email")
+            .limit(parseInt(limit))
+            .lean();
+
+        // Fetch profiles for additional info
+        const usersWithProfile = await Promise.all(users.map(async (user) => {
+            const profile = await UserProfile.findOne({ userId: user._id })
+                .select("profileImage province district bio  languagesKnown")
+                .lean();
+
+            return {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                profileImage: profile?.profileImage || null,
+                province: profile?.province || "",
+                district: profile?.district || "",
+                bio: profile?.bio || "",
+                languages: profile?.languagesKnown || []
+            };
+        }));
+
+        res.status(200).json({
+            success: true,
+            friends: usersWithProfile
+        });
+    } catch (error) {
+        console.error("Error in getSuggestedFriends:", error);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+};

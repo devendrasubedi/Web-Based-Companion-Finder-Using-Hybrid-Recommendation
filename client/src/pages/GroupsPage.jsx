@@ -1,579 +1,570 @@
-import React, { useState, useEffect } from 'react';
-import { Users, Search, Plus, MapPin, Calendar, UserCheck, Loader } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Plus, MapPin, Users, Calendar, AlertCircle, Loader, Filter, ChevronDown, X } from 'lucide-react';
+import CreateGroupModal from '../components/CreateGroupModal';
 import GroupCard from '../components/GroupCard';
+import UserCard from '../components/UserCard';
+import { useAuthStore } from '../store/authStore';
 
-const GroupsPage = () => {
-    const { isAuthenticated } = useAuthStore();
-    const [activeTab, setActiveTab] = useState('groups'); // 'groups', 'partners', 'mygroups'
-    const [searchQuery, setSearchQuery] = useState('');
-    const [trailFilter, setTrailFilter] = useState('');
-    const [trails, setTrails] = useState([]);
-    const [groups, setGroups] = useState([]);
-    const [partners, setPartners] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [showCreateModal, setShowCreateModal] = useState(false);
-    const [newGroup, setNewGroup] = useState({
-        name: '',
-        description: '',
-        trail: '',
-        startDate: '',
-        endDate: '',
-        maxMembers: 10
-    });
+export default function GroupsPage() {
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
 
-    // Fetch all trails
-    useEffect(() => {
-        const fetchTrails = async () => {
-            try {
-                const response = await fetch('http://localhost:5000/api/trails');
-                const data = await response.json();
-                setTrails(data);
-            } catch (error) {
-                console.error('Error fetching trails:', error);
-            }
-        };
-        fetchTrails();
-    }, []);
+  // State for groups
+  const [groups, setGroups] = useState([]);
+  const [suggestedFriends, setSuggestedFriends] = useState([]);
+  const [userGroups, setUserGroups] = useState([]);
+  const [trailsForDropdown, setTrailsForDropdown] = useState([]);
 
-    // Fetch groups based on search and filter
-    useEffect(() => {
-        const fetchGroups = async () => {
-            setLoading(true);
-            try {
-                // Simulate fetching groups from backend
-                // For now, we'll create mock data
-                let filteredGroups = mockGroups;
+  // UI State
+  const [activeTab, setActiveTab] = useState('browse'); // 'browse', 'my-groups', 'friends'
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTrailFilter, setSelectedTrailFilter] = useState('');
+  const [trailFilterQuery, setTrailFilterQuery] = useState('');
+  const [showTrailDropdown, setShowTrailDropdown] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const trailDropdownRef = useRef(null);
 
-                // Filter by trail
-                if (trailFilter) {
-                    filteredGroups = filteredGroups.filter(g =>
-                        g.trail.toLowerCase().includes(trailFilter.toLowerCase())
-                    );
-                }
-
-                // Filter by search query
-                if (searchQuery) {
-                    filteredGroups = filteredGroups.filter(g =>
-                        g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        g.description.toLowerCase().includes(searchQuery.toLowerCase())
-                    );
-                }
-
-                setGroups(filteredGroups);
-            } catch (error) {
-                console.error('Error fetching groups:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchGroups();
-    }, [searchQuery, trailFilter]);
-
-    // Fetch partners based on search
-    useEffect(() => {
-        const fetchPartners = async () => {
-            setLoading(true);
-            try {
-                // Simulate fetching partners from backend
-                let filteredPartners = mockPartners;
-
-                if (searchQuery) {
-                    filteredPartners = filteredPartners.filter(p =>
-                        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        p.bio.toLowerCase().includes(searchQuery.toLowerCase())
-                    );
-                }
-
-                setPartners(filteredPartners);
-            } catch (error) {
-                console.error('Error fetching partners:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        if (activeTab === 'partners') {
-            fetchPartners();
-        }
-    }, [searchQuery, activeTab]);
-
-    // Handle create group
-    const handleCreateGroup = (e) => {
-        e.preventDefault();
-        if (!newGroup.name || !newGroup.trail || !newGroup.startDate) {
-            alert('Please fill in all required fields');
-            return;
-        }
-
-        const createdGroup = {
-            id: Date.now(),
-            ...newGroup,
-            membersCount: 1,
-            maxMembers: newGroup.maxMembers,
-            createdBy: 'Current User',
-            members: ['Current User'],
-            status: 'active'
-        };
-
-        setGroups([createdGroup, ...groups]);
-        setNewGroup({
-            name: '',
-            description: '',
-            trail: '',
-            startDate: '',
-            endDate: '',
-            maxMembers: 10
-        });
-        setShowCreateModal(false);
+  // Close trail dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (trailDropdownRef.current && !trailDropdownRef.current.contains(e.target)) {
+        setShowTrailDropdown(false);
+      }
     };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-    // Handle join group
-    const handleJoinGroup = (groupId) => {
-        setGroups(groups.map(g => {
-            if (g.id === groupId && g.membersCount < g.maxMembers) {
-                return {
-                    ...g,
-                    membersCount: g.membersCount + 1,
-                    members: [...g.members, 'You']
-                };
-            }
-            return g;
-        }));
-    };
+  // Fetch all groups
+  const fetchAllGroups = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/groups/', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
 
-    return (
-        <div className="min-h-screen bg-gray-50 pt-20 pb-10">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                {/* Header */}
-                <div className="mb-8">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                            <Users className="w-8 h-8 text-green-600" />
-                            <h1 className="text-3xl font-bold text-gray-900">Find Trekking Partners</h1>
-                        </div>
-                        {isAuthenticated && (
-                            <button
-                                onClick={() => setShowCreateModal(true)}
-                                className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
-                            >
-                                <Plus className="w-5 h-5" />
-                                Create Group
-                            </button>
-                        )}
-                    </div>
-                    <p className="text-gray-600">Connect with fellow adventurers, join groups, or create your own for upcoming treks.</p>
-                </div>
+      if (!response.ok) throw new Error('Failed to fetch groups');
 
-                {/* Tabs */}
-                <div className="flex gap-2 mb-6 border-b border-gray-200">
-                    <button
-                        onClick={() => setActiveTab('groups')}
-                        className={`px-4 py-3 font-medium transition-colors ${
-                            activeTab === 'groups'
-                                ? 'text-green-600 border-b-2 border-green-600'
-                                : 'text-gray-600 hover:text-green-600'
-                        }`}
-                    >
-                        <div className="flex items-center gap-2">
-                            <Users className="w-4 h-4" />
-                            Groups
-                        </div>
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('partners')}
-                        className={`px-4 py-3 font-medium transition-colors ${
-                            activeTab === 'partners'
-                                ? 'text-green-600 border-b-2 border-green-600'
-                                : 'text-gray-600 hover:text-green-600'
-                        }`}
-                    >
-                        <div className="flex items-center gap-2">
-                            <UserCheck className="w-4 h-4" />
-                            Partners
-                        </div>
-                    </button>
-                    {isAuthenticated && (
-                        <button
-                            onClick={() => setActiveTab('mygroups')}
-                            className={`px-4 py-3 font-medium transition-colors ${
-                                activeTab === 'mygroups'
-                                    ? 'text-green-600 border-b-2 border-green-600'
-                                    : 'text-gray-600 hover:text-green-600'
-                            }`}
-                        >
-                            <div className="flex items-center gap-2">
-                                <Users className="w-4 h-4" />
-                                My Groups
-                            </div>
-                        </button>
-                    )}
-                </div>
+      const data = await response.json();
+      setGroups(data.groups || []);
+      setError('');
+    } catch (err) {
+      console.error('Error fetching groups:', err);
+      setError('Failed to load groups. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-                {/* Search Bar */}
-                <div className="bg-white rounded-lg shadow-sm p-4 mb-6 space-y-4">
-                    <div className="flex gap-4 flex-col md:flex-row">
-                        <div className="flex-1">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                                <input
-                                    type="text"
-                                    placeholder={activeTab === 'partners' ? 'Search partners...' : 'Search groups...'}
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                                />
-                            </div>
-                        </div>
+  // Fetch user's groups
+  const fetchUserGroups = async () => {
+    try {
+      const response = await fetch('/api/groups/user/my-groups', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
 
-                        {/* Trail Filter (only for groups) */}
-                        {activeTab === 'groups' && (
-                            <select
-                                value={trailFilter}
-                                onChange={(e) => setTrailFilter(e.target.value)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 md:w-64"
-                            >
-                                <option value="">All Trails</option>
-                                {trails.map(trail => (
-                                    <option key={trail.id} value={trail.name}>
-                                        {trail.name}
-                                    </option>
-                                ))}
-                            </select>
-                        )}
-                    </div>
-                </div>
+      if (!response.ok) throw new Error('Failed to fetch user groups');
 
-                {/* Content */}
-                {loading ? (
-                    <div className="flex items-center justify-center h-64">
-                        <Loader className="w-8 h-8 text-green-600 animate-spin" />
-                    </div>
-                ) : (
-                    <>
-                        {/* Groups Tab */}
-                        {activeTab === 'groups' && (
-                            <div>
-                                {groups.length === 0 ? (
-                                    <div className="text-center py-12">
-                                        <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                        <p className="text-gray-500 text-lg">No groups found. Create one to start!</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {groups.map(group => (
-                                            <div key={group.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow p-5">
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <h3 className="text-lg font-bold text-gray-900 flex-1">{group.name}</h3>
-                                                    <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                                                        {group.membersCount}/{group.maxMembers}
-                                                    </span>
-                                                </div>
+      const data = await response.json();
+      setUserGroups(data.groups || []);
+    } catch (err) {
+      console.error('Error fetching user groups:', err);
+    }
+  };
 
-                                                <p className="text-gray-600 text-sm mb-4 line-clamp-2">{group.description}</p>
+  // Fetch suggested friends
+  const fetchSuggestedFriends = async () => {
+    try {
+      const response = await fetch('/api/users/suggested/friends?limit=8', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
 
-                                                <div className="space-y-2 mb-4">
-                                                    <div className="flex items-center text-sm text-gray-600">
-                                                        <MapPin className="w-4 h-4 mr-2 text-green-600" />
-                                                        {group.trail}
-                                                    </div>
-                                                    <div className="flex items-center text-sm text-gray-600">
-                                                        <Calendar className="w-4 h-4 mr-2 text-green-600" />
-                                                        {group.startDate} to {group.endDate}
-                                                    </div>
-                                                </div>
+      if (!response.ok) throw new Error('Failed to fetch friends');
 
-                                                <button
-                                                    onClick={() => handleJoinGroup(group.id)}
-                                                    disabled={group.membersCount >= group.maxMembers}
-                                                    className={`w-full font-medium py-2 px-4 rounded-lg transition-colors ${
-                                                        group.membersCount >= group.maxMembers
-                                                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                                                            : 'bg-green-600 text-white hover:bg-green-700'
-                                                    }`}
-                                                >
-                                                    {group.membersCount >= group.maxMembers ? 'Full' : 'Join Group'}
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
+      const data = await response.json();
+      setSuggestedFriends(data.friends || []);
+    } catch (err) {
+      console.error('Error fetching friends:', err);
+    }
+  };
 
-                        {/* Partners Tab */}
-                        {activeTab === 'partners' && (
-                            <div>
-                                {partners.length === 0 ? (
-                                    <div className="text-center py-12">
-                                        <UserCheck className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                        <p className="text-gray-500 text-lg">No partners found.</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {partners.map(partner => (
-                                            <div key={partner.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow p-5">
-                                                <div className="flex items-center gap-4 mb-4">
-                                                    <img
-                                                        src={partner.image}
-                                                        alt={partner.name}
-                                                        className="w-12 h-12 rounded-full object-cover"
-                                                    />
-                                                    <div className="flex-1">
-                                                        <h3 className="font-bold text-gray-900">{partner.name}</h3>
-                                                        <p className="text-sm text-green-600">{partner.level}</p>
-                                                    </div>
-                                                </div>
+  // Fetch trails for dropdown
+  const fetchTrails = async () => {
+    try {
+      const response = await fetch('/api/trails/');
+      if (!response.ok) throw new Error('Failed to fetch trails');
 
-                                                <p className="text-gray-600 text-sm mb-4 line-clamp-2">{partner.bio}</p>
+      const data = await response.json();
+      // Store full trail objects with their IDs
+      setTrailsForDropdown(data || []);
+    } catch (err) {
+      console.error('Error fetching trails:', err);
+    }
+  };
 
-                                                <div className="flex gap-2">
-                                                    <button className="flex-1 bg-green-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
-                                                        Connect
-                                                    </button>
-                                                    <button className="flex-1 bg-gray-100 text-gray-900 font-medium py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors">
-                                                        View Profile
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
+  // Search groups
+  const handleSearch = async (e) => {
+    e.preventDefault();
 
-                        {/* My Groups Tab */}
-                        {activeTab === 'mygroups' && (
-                            <div>
-                                {groups.filter(g => g.members.includes('You')).length === 0 ? (
-                                    <div className="text-center py-12">
-                                        <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                        <p className="text-gray-500 text-lg">You haven't joined any groups yet.</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {groups.filter(g => g.members.includes('You')).map(group => (
-                                            <div key={group.id} className="bg-white rounded-xl shadow-sm border border-green-200 overflow-hidden hover:shadow-md transition-shadow p-5">
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <h3 className="text-lg font-bold text-gray-900 flex-1">{group.name}</h3>
-                                                    <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                                                        {group.membersCount}/{group.maxMembers}
-                                                    </span>
-                                                </div>
+    if (!searchQuery.trim()) {
+      fetchAllGroups();
+      return;
+    }
 
-                                                <p className="text-gray-600 text-sm mb-4 line-clamp-2">{group.description}</p>
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/groups/search?search=${encodeURIComponent(searchQuery)}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
 
-                                                <div className="space-y-2 mb-4">
-                                                    <div className="flex items-center text-sm text-gray-600">
-                                                        <MapPin className="w-4 h-4 mr-2 text-green-600" />
-                                                        {group.trail}
-                                                    </div>
-                                                    <div className="flex items-center text-sm text-gray-600">
-                                                        <Calendar className="w-4 h-4 mr-2 text-green-600" />
-                                                        {group.startDate} to {group.endDate}
-                                                    </div>
-                                                </div>
+      if (!response.ok) throw new Error('Failed to search groups');
 
-                                                <button className="w-full bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-                                                    Go to Chat
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </>
-                )}
+      const data = await response.json();
+      setGroups(data.groups || []);
+      setError('');
+    } catch (err) {
+      console.error('Error searching groups:', err);
+      setError('Failed to search groups. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-                {/* Create Group Modal */}
-                {showCreateModal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                        <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-                            <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Group</h2>
+  // Handle create group
+  const handleCreateGroup = async (formData) => {
+    try {
+      setLoading(true);
 
-                            <form onSubmit={handleCreateGroup} className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Group Name *</label>
-                                    <input
-                                        type="text"
-                                        value={newGroup.name}
-                                        onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
-                                        placeholder="e.g., Everest Base Camp 2026"
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                                    />
-                                </div>
+      // Find the trail ID by matching the trail name
+      const selectedTrail = trailsForDropdown.find(t => (t.name || t.id) === formData.trailName);
+      if (!selectedTrail) {
+        throw new Error('Selected trail not found');
+      }
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Choose Trail *</label>
-                                    <select
-                                        value={newGroup.trail}
-                                        onChange={(e) => setNewGroup({ ...newGroup, trail: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                                    >
-                                        <option value="">Select a trail</option>
-                                        {trails.map(trail => (
-                                            <option key={trail.id} value={trail.name}>
-                                                {trail.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+      // Add trailId to form data (use id or _id field from trail object)
+      const groupData = {
+        ...formData,
+        trailId: selectedTrail.id || selectedTrail._id
+      };
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                                    <textarea
-                                        value={newGroup.description}
-                                        onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
-                                        placeholder="Tell others about your group..."
-                                        rows="3"
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                                    />
-                                </div>
+      console.log("📤 Sending group data:", groupData);
+      console.log("   Selected trail:", selectedTrail);
+      console.log("   formData:", formData);
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
-                                        <input
-                                            type="date"
-                                            value={newGroup.startDate}
-                                            onChange={(e) => setNewGroup({ ...newGroup, startDate: e.target.value })}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                                        <input
-                                            type="date"
-                                            value={newGroup.endDate}
-                                            onChange={(e) => setNewGroup({ ...newGroup, endDate: e.target.value })}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                                        />
-                                    </div>
-                                </div>
+      const response = await fetch('/api/groups/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(groupData)
+      });
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Max Members</label>
-                                    <input
-                                        type="number"
-                                        min="2"
-                                        max="50"
-                                        value={newGroup.maxMembers}
-                                        onChange={(e) => setNewGroup({ ...newGroup, maxMembers: parseInt(e.target.value) })}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                                    />
-                                </div>
+      if (!response.ok) {
+        try {
+          const errorData = await response.json();
+          console.error("❌ Server returned error:", errorData);
+          throw new Error(errorData.message || 'Failed to create group');
+        } catch (parseError) {
+          // If response is not JSON (e.g., HTML error page), throw generic error
+          console.error("❌ Server error (non-JSON response):", response.status, response.statusText);
+          throw new Error(`Server error (${response.status}). Please check the server logs.`);
+        }
+      }
 
-                                <div className="flex gap-3 pt-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowCreateModal(false)}
-                                        className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors"
-                                    >
-                                        Create Group
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
+      const data = await response.json();
+      console.log("✅ Group created successfully:", data);
+      
+      // Close modal
+      setShowCreateModal(false);
+
+      // Refresh groups and switch to My Groups tab to show the new group
+      await fetchAllGroups();
+      await fetchUserGroups();
+      setActiveTab('my-groups');
+
+      setError('');
+    } catch (err) {
+      console.error('Error creating group:', err);
+      setError(err.message || 'Failed to create group');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle join group
+  const handleJoinGroup = async (groupId) => {
+    try {
+      setLoading(true);
+
+      const response = await fetch(`/api/groups/${groupId}/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to join group');
+      }
+
+      // Refresh both lists so the group moves from Browse to My Groups
+      await fetchAllGroups();
+      await fetchUserGroups();
+
+      setError('');
+    } catch (err) {
+      console.error('Error joining group:', err);
+      setError(err.message || 'Failed to join group');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle connect with friend
+  const handleConnectFriend = async (friendId) => {
+    try {
+      setLoading(true);
+
+      // Create or get direct conversation
+      const response = await fetch('/api/chat/conversations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ recipientId: friendId })
+      });
+
+      if (!response.ok) throw new Error('Failed to create conversation');
+
+      const data = await response.json();
+
+      // Navigate to messages
+      navigate(`/messages/${data.conversation._id}`);
+    } catch (err) {
+      console.error('Error connecting with friend:', err);
+      setError('Failed to connect. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle open chat for a group
+  const handleOpenChat = (conversationId) => {
+    if (conversationId) {
+      navigate(`/messages/${conversationId}`);
+    }
+  };
+
+  // Initial data load
+  useEffect(() => {
+    fetchAllGroups();
+    fetchUserGroups();
+    fetchSuggestedFriends();
+    fetchTrails();
+  }, []);
+
+  // Filtered groups for Browse tab: exclude user's groups, apply trail filter & search
+  const filteredGroups = useMemo(() => {
+    // Get the set of group IDs the user is already a member of
+    const userGroupIds = new Set(userGroups.map(g => g._id));
+
+    // Start with all groups, excluding ones the user is in
+    let browsableGroups = groups.filter(group => !userGroupIds.has(group._id));
+
+    // Apply trail filter if selected
+    if (selectedTrailFilter) {
+      browsableGroups = browsableGroups.filter(group =>
+        (group.trailName || '') === selectedTrailFilter
+      );
+    }
+
+    // Apply search filter if there's a query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      browsableGroups = browsableGroups.filter(group =>
+        (group.name || '').toLowerCase().includes(query) ||
+        (group.trailName || '').toLowerCase().includes(query) ||
+        (group.description || '').toLowerCase().includes(query)
+      );
+    }
+
+    return browsableGroups;
+  }, [groups, userGroups, searchQuery, selectedTrailFilter]);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pt-20">
+      {/* Header */}
+      <div className="sticky top-20 z-40 bg-white shadow-sm border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Trek Groups</h1>
+              <p className="text-gray-600 text-sm mt-1">Find partners, create groups, organize adventures</p>
             </div>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 via-emerald-600 to-green-600 hover:from-green-700 hover:via-emerald-700 hover:to-green-700 text-white rounded-xl font-bold transition duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+            >
+              <Plus size={20} />
+              Create Group
+            </button>
+          </div>
         </div>
-    );
-};
+      </div>
 
-// Mock data for groups and partners
-const mockGroups = [
-    {
-        id: 1,
-        name: 'Everest Base Camp Quest 2026',
-        description: 'Join us for an epic adventure to Everest Base Camp. We have experienced guides and will take care of logistics.',
-        trail: 'Everest Base Camp',
-        startDate: '2026-04-15',
-        endDate: '2026-05-05',
-        membersCount: 8,
-        maxMembers: 12,
-        createdBy: 'John Doe',
-        members: ['John Doe', 'Jane Smith', 'You'],
-        status: 'active'
-    },
-    {
-        id: 2,
-        name: 'Annapurna Circuit Adventure',
-        description: 'Beautiful circuit trek with stunning mountain views. Perfect for intermediate trekkers.',
-        trail: 'Annapurna Circuit',
-        startDate: '2026-05-01',
-        endDate: '2026-05-20',
-        membersCount: 5,
-        maxMembers: 10,
-        createdBy: 'Mike Wilson',
-        members: ['Mike Wilson'],
-        status: 'active'
-    },
-    {
-        id: 3,
-        name: 'Langtang Valley Trail Group',
-        description: 'Moderate trek suitable for beginners. Close to Kathmandu, great for a quick getaway.',
-        trail: 'Langtang Valley',
-        startDate: '2026-03-20',
-        endDate: '2026-03-27',
-        membersCount: 12,
-        maxMembers: 12,
-        createdBy: 'Sarah Connor',
-        members: ['Sarah Connor'],
-        status: 'active'
-    },
-    {
-        id: 4,
-        name: 'Poon Hill Sunrise Watchers',
-        description: 'Short trek to catch the magnificent sunrise. Back in 4 days.',
-        trail: 'Ghorepani Poon Hill',
-        startDate: '2026-04-10',
-        endDate: '2026-04-14',
-        membersCount: 6,
-        maxMembers: 8,
-        createdBy: 'Tom Hardy',
-        members: ['Tom Hardy'],
-        status: 'active'
-    },
-];
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Tabs */}
+        <div className="flex gap-4 mb-8 border-b border-slate-200">
+          <button
+            onClick={() => setActiveTab('browse')}
+            className={`px-4 py-3 font-semibold border-b-2 transition ${
+              activeTab === 'browse'
+                ? 'border-green-600 text-green-600'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Browse Groups
+          </button>
+          <button
+            onClick={() => setActiveTab('my-groups')}
+            className={`px-4 py-3 font-semibold border-b-2 transition ${
+              activeTab === 'my-groups'
+                ? 'border-green-600 text-green-600'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            My Groups {userGroups.length > 0 && `(${userGroups.length})`}
+          </button>
+          <button
+            onClick={() => setActiveTab('friends')}
+            className={`px-4 py-3 font-semibold border-b-2 transition ${
+              activeTab === 'friends'
+                ? 'border-green-600 text-green-600'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Suggested Friends
+          </button>
+        </div>
 
-const mockPartners = [
-    {
-        id: 1,
-        name: 'Alex Johnson',
-        bio: 'Experienced mountaineer. Completed Kilimanjaro, Elbrus, and Aconcagua. Love high altitude trekking.',
-        level: 'Expert',
-        image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop'
-    },
-    {
-        id: 2,
-        name: 'Emma Wilson',
-        bio: 'Weekend trekker from Kathmandu. Exploring Nepal\'s hidden trails. Always up for new adventures.',
-        level: 'Intermediate',
-        image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop'
-    },
-    {
-        id: 3,
-        name: 'Priya Sharma',
-        bio: 'Solo traveler. Have trekked in Himalayas, Alps, and Andes. Love photography and meeting new people.',
-        level: 'Advanced',
-        image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop'
-    },
-    {
-        id: 4,
-        name: 'David Chen',
-        bio: 'Beginner friendly guide. Passionate about sustainable tourism and local culture.',
-        level: 'Beginner',
-        image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop'
-    },
-];
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+            <AlertCircle className="text-red-600 flex-shrink-0" size={20} />
+            <p className="text-red-800">{error}</p>
+          </div>
+        )}
 
-export default GroupsPage;
+        {/* Browse Groups Tab */}
+        {activeTab === 'browse' && (
+          <div>
+            {/* Search & Trail Filter */}
+            <div className="mb-8 space-y-4">
+              {/* Search Bar */}
+              <form onSubmit={handleSearch}>
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search groups by name, trail, or description..."
+                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 hover:border-green-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
+                  />
+                </div>
+              </form>
+
+              {/* Trail Filter Dropdown (Searchable) */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-gray-600 flex-shrink-0">
+                  <Filter size={18} />
+                  <span className="text-sm font-semibold">Filter by Trail:</span>
+                </div>
+                <div className="relative flex-1 max-w-md" ref={trailDropdownRef}>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={selectedTrailFilter ? selectedTrailFilter : trailFilterQuery}
+                      onChange={(e) => {
+                        setTrailFilterQuery(e.target.value);
+                        setSelectedTrailFilter('');
+                        setShowTrailDropdown(true);
+                      }}
+                      onFocus={() => setShowTrailDropdown(true)}
+                      placeholder="Type or select a trail..."
+                      className="w-full px-4 py-2.5 pr-20 border-2 border-gray-300 hover:border-green-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition bg-white text-sm font-medium"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      {(selectedTrailFilter || trailFilterQuery) && (
+                        <button
+                          onClick={() => {
+                            setSelectedTrailFilter('');
+                            setTrailFilterQuery('');
+                            setShowTrailDropdown(false);
+                          }}
+                          className="p-1 hover:bg-gray-100 rounded-full transition"
+                        >
+                          <X size={14} className="text-gray-400" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setShowTrailDropdown(!showTrailDropdown)}
+                        className="p-1 hover:bg-gray-100 rounded-full transition"
+                      >
+                        <ChevronDown size={16} className={`text-gray-400 transition-transform ${showTrailDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+                  {showTrailDropdown && (
+                    <div className="absolute z-50 top-full mt-1 w-full bg-white border-2 border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                      <button
+                        onClick={() => {
+                          setSelectedTrailFilter('');
+                          setTrailFilterQuery('');
+                          setShowTrailDropdown(false);
+                        }}
+                        className={`w-full text-left px-4 py-2.5 text-sm hover:bg-green-50 transition ${
+                          !selectedTrailFilter ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-700'
+                        }`}
+                      >
+                        All Trails
+                      </button>
+                      {trailsForDropdown
+                        .filter(trail => {
+                          const name = trail.name || trail.id;
+                          return !trailFilterQuery || name.toLowerCase().includes(trailFilterQuery.toLowerCase());
+                        })
+                        .map(trail => {
+                          const trailName = trail.name || trail.id;
+                          return (
+                            <button
+                              key={trail._id || trail.id}
+                              onClick={() => {
+                                setSelectedTrailFilter(trailName);
+                                setTrailFilterQuery('');
+                                setShowTrailDropdown(false);
+                              }}
+                              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-green-50 transition ${
+                                selectedTrailFilter === trailName ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-700'
+                              }`}
+                            >
+                              {trailName}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Loading State */}
+            {loading && (
+              <div className="flex items-center justify-center py-12">
+                <Loader className="animate-spin text-green-600 mr-3" size={24} />
+                <p className="text-gray-600">Loading groups...</p>
+              </div>
+            )}
+
+            {/* Groups Grid */}
+            {!loading && filteredGroups.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredGroups.map(group => (
+                  <GroupCard
+                    key={group._id}
+                    group={group}
+                    onJoin={handleJoinGroup}
+                    isMember={false}
+                  />
+                ))}
+              </div>
+            ) : !loading ? (
+              <div className="text-center py-12">
+                <MapPin className="mx-auto text-gray-400 mb-4" size={48} />
+                <p className="text-gray-600 text-lg font-medium">No groups found</p>
+                <p className="text-gray-500">Try a different search or create a new group</p>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* My Groups Tab */}
+        {activeTab === 'my-groups' && (
+          <div>
+            {loading && (
+              <div className="flex items-center justify-center py-12">
+                <Loader className="animate-spin text-green-600 mr-3" size={24} />
+                <p className="text-gray-600">Loading your groups...</p>
+              </div>
+            )}
+
+            {!loading && userGroups.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {userGroups.map(group => (
+                  <GroupCard
+                    key={group._id}
+                    group={group}
+                    isMember={true}
+                    onOpenChat={handleOpenChat}
+                  />
+                ))}
+              </div>
+            ) : !loading ? (
+              <div className="text-center py-12">
+                <Users className="mx-auto text-gray-400 mb-4" size={48} />
+                <p className="text-gray-600 text-lg font-medium">You haven't joined any groups yet</p>
+                <p className="text-gray-500">Browse groups and join one to get started</p>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* Suggested Friends Tab */}
+        {activeTab === 'friends' && (
+          <div>
+            {loading && (
+              <div className="flex items-center justify-center py-12">
+                <Loader className="animate-spin text-green-600 mr-3" size={24} />
+                <p className="text-gray-600">Loading suggested friends...</p>
+              </div>
+            )}
+
+            {!loading && suggestedFriends.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {suggestedFriends.map(friend => (
+                  <UserCard
+                    key={friend._id}
+                    user={friend}
+                    onConnect={handleConnectFriend}
+                  />
+                ))}
+              </div>
+            ) : !loading ? (
+              <div className="text-center py-12">
+                <Users className="mx-auto text-gray-400 mb-4" size={48} />
+                <p className="text-gray-600 text-lg font-medium">No users available</p>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      {/* Create Group Modal */}
+      {showCreateModal && (
+        <CreateGroupModal
+          onClose={() => setShowCreateModal(false)}
+          onSubmit={handleCreateGroup}
+          availableTrails={trailsForDropdown}
+        />
+      )}
+    </div>
+  );
+}
