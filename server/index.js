@@ -26,6 +26,9 @@ const io = new Server(httpServer, {
   }
 });
 
+// Make io accessible in controllers via req.app.get('io')
+app.set("io", io);
+
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({ origin: true, credentials: true }));

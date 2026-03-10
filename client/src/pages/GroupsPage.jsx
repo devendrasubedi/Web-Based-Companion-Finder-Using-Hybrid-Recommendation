@@ -394,9 +394,9 @@ export default function GroupsPage() {
   }, [groups, userGroups, searchQuery, selectedTrailFilter]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pt-20">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pt-4">
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 pb-8">
         {/* Tabs and Actions */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 border-b border-slate-200">
           <div className="flex gap-4 overflow-x-auto w-full sm:w-auto">

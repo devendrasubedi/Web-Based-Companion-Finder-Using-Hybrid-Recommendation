@@ -25,7 +25,17 @@ export const sendFriendRequest = async (req, res) => {
             getDisplayName(receiverId)
         ]);
 
-        await UserRelationship.sendRequest(senderId, receiverId, senderName, receiverName);
+        const newRequest = await UserRelationship.sendRequest(senderId, receiverId, senderName, receiverName);
+
+        // Emit socket event to the receiver
+        const io = req.app.get("io");
+        if (io) {
+            io.to(receiverId.toString()).emit("new_friend_request", {
+                senderId,
+                senderName,
+                timestamp: new Date()
+            });
+        }
 
         res.status(200).json({ success: true, message: "Friend request sent successfully" });
     } catch (error) {

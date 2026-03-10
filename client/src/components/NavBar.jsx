@@ -1,16 +1,50 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Menu, X, Mountain, User, MessageCircle, Home, Compass, Users, LogOut } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import axios from 'axios';
 import useChatStore from '../store/useChatStore';
 import { useAuthStore } from '../store/authStore';
+import { useSocket } from '../context/SocketContext';
 
 const NavBar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const { conversations } = useChatStore();
-  const { isAuthenticated, logout } = useAuthStore();
+  const { isAuthenticated, logout, pendingRequests, setPendingRequests, incrementPendingRequests } = useAuthStore();
+  const { socket } = useSocket();
 
   const unreadCount = conversations.reduce((acc, curr) => acc + (curr.unreadCount || 0), 0);
+
+  // Fetch initial friend requests
+  useEffect(() => {
+    if (isAuthenticated) {
+      const fetchRequests = async () => {
+        try {
+          const res = await axios.get('/api/friends/requests');
+          if (res.data.success) {
+            setPendingRequests(res.data.received?.length || 0);
+          }
+        } catch (error) {
+          console.error("Failed to fetch friend requests:", error);
+        }
+      };
+      fetchRequests();
+    }
+  }, [isAuthenticated, setPendingRequests]);
+
+  // Listen for real-time friend requests via websockets
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleNewFriendRequest = (data) => {
+      incrementPendingRequests();
+    };
+
+    socket.on("new_friend_request", handleNewFriendRequest);
+    return () => {
+      socket.off("new_friend_request", handleNewFriendRequest);
+    };
+  }, [socket, incrementPendingRequests]);
 
   // Helper to check active state
   const isActive = (path) => location.pathname === path ? "text-green-700 font-semibold" : "text-gray-600 hover:text-green-600";
@@ -41,7 +75,7 @@ const NavBar = () => {
               <>
                 <Link to="/groups" className={`${isActive('/groups')} transition-colors text-sm font-medium flex items-center gap-1.5`}>
                   <Users className="w-4 h-4" />
-                  Groups
+                  Groups & People
                 </Link>
                 <Link to="/messages" className={`${isActive('/messages')} transition-colors text-sm font-medium flex items-center gap-1.5 relative`}>
                   <MessageCircle className="w-4 h-4" />
@@ -55,10 +89,15 @@ const NavBar = () => {
 
                 {/* Profile & Logout for Authenticated Users */}
                 <div className="border-l border-gray-200 pl-6 ml-2 flex items-center gap-4">
-                  <Link to="/profile">
+                  <Link to="/profile" className="relative">
                     <button className={`p-2 rounded-full transition-all ${location.pathname === '/profile' ? 'bg-green-50 text-green-700' : 'bg-gray-50 hover:bg-green-50 text-gray-600 hover:text-green-700'}`}>
                       <User className="w-5 h-5" />
                     </button>
+                    {pendingRequests > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-4 w-4 bg-red-500 rounded-full flex items-center justify-center border-2 border-white">
+                        {pendingRequests > 9 ? '9+' : pendingRequests}
+                      </span>
+                    )}
                   </Link>
                   <button
                     onClick={() => logout()}
@@ -130,7 +169,7 @@ const NavBar = () => {
                   className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-green-700 hover:bg-green-50"
                 >
                   <Users className="w-5 h-5" />
-                  Groups
+                  Groups & People
                 </Link>
                 <Link
                   to="/messages"
@@ -151,10 +190,17 @@ const NavBar = () => {
                   <Link
                     to="/profile"
                     onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-green-700 hover:bg-green-50"
+                    className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-green-700 hover:bg-green-50 justify-between"
                   >
-                    <User className="w-5 h-5" />
-                    My Profile
+                    <div className="flex items-center gap-3">
+                      <User className="w-5 h-5" />
+                      My Profile
+                    </div>
+                    {pendingRequests > 0 && (
+                      <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                        {pendingRequests > 9 ? '9+' : pendingRequests}
+                      </span>
+                    )}
                   </Link>
                   <button
                     onClick={async () => {

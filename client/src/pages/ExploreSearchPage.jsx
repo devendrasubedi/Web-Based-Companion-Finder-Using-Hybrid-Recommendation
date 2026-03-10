@@ -417,7 +417,7 @@ const ExploreSearchPage = () => {
   }
 
   return (
-    <div className="min-h-screen pt-24 pb-12">
+    <div className="min-h-screen pt-4 pb-12">
       <div className="w-full px-4 sm:px-6 lg:px-8">
 
         {/* Header & Search */}
