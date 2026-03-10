@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import axios from "axios";
 import { RecommendationCache } from "../models/recommendation_cache.js";
 import { Trail } from "../models/trailModel.js";
@@ -31,6 +32,39 @@ function normalizeTrail(t, reason = "") {
         tags: t.tags || [],
         rating: t.rating || 0,
         numReviews: t.numReviews || 0,
+        reason,
+    };
+}
+
+// Compute age from a dob Date value
+function computeAge(dob) {
+    if (!dob) return null;
+    const today = new Date();
+    const birth = new Date(dob);
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+    return age;
+}
+
+// Shape one companion object — all fields ProfileCard + HomePage need
+function shapeCompanion(user, profile = {}, reason = "") {
+    return {
+        _id:             String(user._id),
+        id:              String(user._id),
+        email:           user.email            || "",
+        name:            profile.name          || user.name || "Trekker",
+        bio:             profile.bio           || "",
+        province:        profile.province      || "",
+        district:        profile.district      || "",
+        gender:          profile.gender        || "",
+        experienceLevel: profile.experienceLevel || "beginner",
+        availability:    profile.availability  || "",
+        budgetLevel:     profile.budgetLevel   || "",
+        interests:       profile.interests     || [],
+        languages:       profile.languagesKnown || [],   // ProfileCard reads user.languages
+        languagesKnown:  profile.languagesKnown || [],
+        age:             computeAge(profile.dob),
         reason,
     };
 }
@@ -95,9 +129,12 @@ export const getTrailRecommendations = async (req, res) => {
 };
 
 // GET /api/recommendations/companions
+// itemId in cache = companion's userId (ObjectId string)
+// UserProfile.userId = same ObjectId → query UserProfile directly (both in auth_db)
 export const getCompanionRecommendations = async (req, res) => {
     try {
         const userId = req.userId;
+        const { ObjectId } = mongoose.Types;
 
         const cached = await RecommendationCache.findOne({
             userId,
@@ -106,34 +143,33 @@ export const getCompanionRecommendations = async (req, res) => {
         }).lean();
 
         if (cached && cached.recommendations.length > 0) {
+            // Build rank/reason lookup keyed by itemId string
             const reasonMap = {};
             const orderedIds = cached.recommendations.map(r => {
                 reasonMap[r.itemId] = r.reason;
                 return r.itemId;
             });
 
-            const users = await User.find({ _id: { $in: orderedIds } })
-                .select("-password").lean();
-            const profiles = await UserProfile.find({
-                userId: { $in: orderedIds },
-            }).lean();
+            // Convert itemId strings → ObjectIds for the userId field in UserProfile
+            const objectIds = orderedIds
+                .filter(id => ObjectId.isValid(id))
+                .map(id => new ObjectId(id));
+
+            // Query UserProfile directly — userId IS the itemId, both in auth_db
+            const profiles = await UserProfile.find({ userId: { $in: objectIds } }).lean();
+
+            // Map by userId string for O(1) lookup
             const profileMap = {};
             profiles.forEach(p => { profileMap[String(p.userId)] = p; });
 
-            const indexMap = {};
-            orderedIds.forEach((id, i) => { indexMap[id] = i; });
-
-            const companions = users
-                .sort((a, b) => indexMap[String(a._id)] - indexMap[String(b._id)])
-                .map(u => {
-                    const profile = profileMap[String(u._id)] || {};
-                    return {
-                        ...u,
-                        ...profile,
-                        _id: u._id,
-                        reason: reasonMap[String(u._id)] || "",
-                    };
-                });
+            // Re-sort by recommendation rank, attach reason — skip if no profile found
+            const companions = orderedIds
+                .map(uid => {
+                    const p = profileMap[uid];
+                    if (!p) return null;  // profile missing / deleted user
+                    return shapeCompanion({ _id: uid }, p, reasonMap[uid] || "");
+                })
+                .filter(Boolean);
 
             return res.status(200).json({
                 success: true,
@@ -142,37 +178,13 @@ export const getCompanionRecommendations = async (req, res) => {
             });
         }
 
-        // Cache miss — trigger async recompute and fall back to all users enriched with profile
+        // Cache miss — trigger async recompute, fall back to all UserProfiles
         triggerPythonRecomputeCompanions(userId);
 
-        const users = await User.find({}).select("-password").lean();
-        const profiles = await UserProfile.find({
-            userId: { $in: users.map(u => u._id) },
-        }).lean();
-        const profileMap = {};
-        profiles.forEach(p => { profileMap[String(p.userId)] = p; });
-
-        const companions = users.map(u => {
-            const profile = profileMap[String(u._id)] || {};
-            let age = null;
-            if (profile.dob) {
-                const today = new Date();
-                const birth = new Date(profile.dob);
-                age = today.getFullYear() - birth.getFullYear();
-                const m = today.getMonth() - birth.getMonth();
-                if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-            }
-            return {
-                ...u,
-                name: profile.name || u.name,
-                province: profile.province || "",
-                district: profile.district || "",
-                gender: profile.gender || "",
-                languages: profile.languagesKnown || [],
-                age,
-                _id: u._id,
-            };
-        });
+        const profiles = await UserProfile.find({}).lean();
+        const companions = profiles.map(p =>
+            shapeCompanion({ _id: p.userId }, p, "")
+        );
 
         return res.status(200).json({
             success: true,

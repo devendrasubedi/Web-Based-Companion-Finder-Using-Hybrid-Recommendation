@@ -124,13 +124,6 @@ def load_trails():
     return trails
 
 
-def invalidate_trail_cache():
-    """Force reload on next load_trails() call."""
-    global _trail_cache, _trail_cache_time
-    _trail_cache = None
-    _trail_cache_time = 0
-
-
 def load_all_profiles():
     """
     Load all user profiles that have interests set.

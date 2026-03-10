@@ -1,6 +1,7 @@
 import { Conversation } from "../models/conversation.model.js";
 import { Message } from "../models/message.model.js";
 import { User } from "../models/user.model.js";
+import { UserRelationship } from "../models/user_relationship.js";
 
 // Get all conversations for the logged-in user
 export const getUserConversations = async (req, res) => {
@@ -421,7 +422,7 @@ export const addGroupParticipants = async (req, res) => {
     }
 };
 
-// Search users to start a conversation
+// Search users to start a conversation (ONLY FRIENDS)
 export const searchUsers = async (req, res) => {
     try {
         const userId = req.userId;
@@ -434,8 +435,17 @@ export const searchUsers = async (req, res) => {
             });
         }
 
+        // Get the list of friend IDs for the current user
+        const friends = await UserRelationship.getFriends(userId);
+        const friendIds = friends.map(f => f._id || f.id);
+
+        if (friendIds.length === 0) {
+            return res.status(200).json({ success: true, users: [] });
+        }
+
+        // Search only within the friend list
         const users = await User.find({
-            _id: { $ne: userId }, // Exclude current user
+            _id: { $in: friendIds, $ne: userId }, // Exclude current user just in case
             $or: [
                 { name: { $regex: query, $options: 'i' } },
                 { email: { $regex: query, $options: 'i' } }

@@ -444,13 +444,23 @@ export const addReview = async (req, res) => {
 
         // Also store the rating in UserTrailInteraction
         try {
-            let interaction = await UserTrailInteraction.findOne({ userId, trailId: req.params.id });
-            if (!interaction) interaction = new UserTrailInteraction({ userId, trailId: req.params.id });
+            // ALWAYS use req.userId from the verified token for DB interactions
+            const interactionUserId = req.userId || userId; // fallback to body if req.userId unexpectedly missing
+            const targetTrailId = String(req.params.id);
+
+            let interaction = await UserTrailInteraction.findOne({ userId: interactionUserId, trailId: targetTrailId });
+            if (!interaction) {
+                interaction = new UserTrailInteraction({ userId: interactionUserId, trailId: targetTrailId });
+            }
             interaction.rating = Number(rating);
+            interaction.isSaved = interaction.isSaved || false;
+            interaction.isCompleted = interaction.isCompleted || false;
             interaction.implicitScore = (interaction.isSaved ? 3 : 0) + (interaction.isCompleted ? 5 : 0) + Number(rating);
+            
             await interaction.save();
+            console.log(`[Adding Review] Successfully updated UserTrailInteraction for User ${interactionUserId} and Trail ${targetTrailId} - Rating: ${rating}, implicitScore: ${interaction.implicitScore}`);
         } catch (interactionErr) {
-            console.error('Error saving rating to UserTrailInteraction:', interactionErr);
+            console.error('[Adding Review] CRITICAL ERROR saving rating to UserTrailInteraction:', interactionErr);
         }
 
         res.status(201).json({ message: 'Review added', reviews: trail.reviews, rating: trail.rating, numReviews: trail.numReviews });

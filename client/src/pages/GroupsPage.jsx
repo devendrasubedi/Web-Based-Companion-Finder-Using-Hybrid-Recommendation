@@ -20,6 +20,11 @@ export default function GroupsPage() {
   const [userGroups, setUserGroups] = useState([]);
   const [trailsForDropdown, setTrailsForDropdown] = useState([]);
 
+  // Search Users State
+  const [userSearchResults, setUserSearchResults] = useState([]);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [searchingUsers, setSearchingUsers] = useState(false);
+
   // UI State
   const [activeTab, setActiveTab] = useState('browse'); // 'browse', 'my-groups', 'friends'
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -79,22 +84,30 @@ export default function GroupsPage() {
     }
   };
 
-  // Fetch suggested friends
+  // Fetch suggested friends (now using hybrid recommendations)
   const fetchSuggestedFriends = async () => {
     try {
-      const response = await fetch('/api/users/suggested/friends?limit=8', {
+      const response = await fetch('/api/recommendations/companions', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
 
-      if (!response.ok) throw new Error('Failed to fetch friends');
+      if (!response.ok) throw new Error('Failed to fetch recommendations');
 
       const data = await response.json();
-      const usersList = data.friends || [];
-      setSuggestedFriends(usersList);
+      
+      // Ensure we have an array (support both data.companions and data.friends formats)
+      const usersList = Array.isArray(data.companions) ? data.companions 
+                      : Array.isArray(data.friends) ? data.friends 
+                      : Array.isArray(data) ? data 
+                      : [];
+                      
+      // Limit to 8 for the groups page display
+      const displayList = usersList.slice(0, 8);
+      setSuggestedFriends(displayList);
 
       // Load friend statuses
-      if (user && usersList.length > 0) {
-        const otherIds = usersList
+      if (user && displayList.length > 0) {
+        const otherIds = displayList
           .filter(u => String(u._id) !== String(user._id || user.id))
           .map(u => u._id);
         const statusResults = await Promise.allSettled(
@@ -126,6 +139,47 @@ export default function GroupsPage() {
       setTrailsForDropdown(data || []);
     } catch (err) {
       console.error('Error fetching trails:', err);
+    }
+  };
+
+  // Search New Users
+  const handleSearchNewUsers = async (e) => {
+    e.preventDefault();
+    if (!userSearchQuery.trim()) return;
+
+    try {
+      setSearchingUsers(true);
+      const response = await fetch(`/api/users?search=${encodeURIComponent(userSearchQuery)}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to search users');
+
+      const data = await response.json();
+      setUserSearchResults(data || []);
+      
+      // Load friend statuses for results
+      if (user && data.length > 0) {
+        const otherIds = data
+          .filter(u => String(u._id) !== String(user._id || user.id))
+          .map(u => u._id);
+        const statusResults = await Promise.allSettled(
+          otherIds.map(uid =>
+            axios.get(`/api/friends/status/${uid}`, {
+              headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+            }).then(r => ({ uid, status: r.data.status }))
+          )
+        );
+        const statuses = {};
+        statusResults.forEach(r => {
+          if (r.status === 'fulfilled') statuses[r.value.uid] = r.value.status;
+        });
+        setFriendStatuses(prev => ({ ...prev, ...statuses }));
+      }
+    } catch (err) {
+      console.error('Error searching users:', err);
+    } finally {
+      setSearchingUsers(false);
     }
   };
 
@@ -341,55 +395,56 @@ export default function GroupsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pt-20">
-      {/* Header */}
-      <div className="sticky top-20 z-40 bg-white shadow-sm border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Trek Groups</h1>
-              <p className="text-gray-600 text-sm mt-1">Find partners, create groups, organize adventures</p>
-            </div>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 via-emerald-600 to-green-600 hover:from-green-700 hover:via-emerald-700 hover:to-green-700 text-white rounded-xl font-bold transition duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-            >
-              <Plus size={20} />
-              Create Group
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Tabs */}
-        <div className="flex gap-4 mb-8 border-b border-slate-200">
+        {/* Tabs and Actions */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 border-b border-slate-200">
+          <div className="flex gap-4 overflow-x-auto w-full sm:w-auto">
+            <button
+              onClick={() => setActiveTab('browse')}
+              className={`px-4 py-3 font-semibold border-b-2 transition whitespace-nowrap ${activeTab === 'browse'
+                  ? 'border-green-600 text-green-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+            >
+              Browse Groups
+            </button>
+            <button
+              onClick={() => setActiveTab('my-groups')}
+              className={`px-4 py-3 font-semibold border-b-2 transition whitespace-nowrap ${activeTab === 'my-groups'
+                  ? 'border-green-600 text-green-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+            >
+              My Groups {userGroups.length > 0 && `(${userGroups.length})`}
+            </button>
+            <button
+              onClick={() => setActiveTab('friends')}
+              className={`px-4 py-3 font-semibold border-b-2 transition whitespace-nowrap ${activeTab === 'friends'
+                  ? 'border-green-600 text-green-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+            >
+              Suggested Friends
+            </button>
+            <button
+              onClick={() => setActiveTab('search-users')}
+              className={`px-4 py-3 font-semibold border-b-2 transition whitespace-nowrap ${activeTab === 'search-users'
+                  ? 'border-green-600 text-green-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+            >
+              Search Users
+            </button>
+            {/* Search Users Tab added next step */}
+          </div>
+          
           <button
-            onClick={() => setActiveTab('browse')}
-            className={`px-4 py-3 font-semibold border-b-2 transition ${activeTab === 'browse'
-                ? 'border-green-600 text-green-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-600 via-emerald-600 to-green-600 hover:from-green-700 hover:via-emerald-700 hover:to-green-700 text-white rounded-xl font-semibold transition duration-200 shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
           >
-            Browse Groups
-          </button>
-          <button
-            onClick={() => setActiveTab('my-groups')}
-            className={`px-4 py-3 font-semibold border-b-2 transition ${activeTab === 'my-groups'
-                ? 'border-green-600 text-green-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-          >
-            My Groups {userGroups.length > 0 && `(${userGroups.length})`}
-          </button>
-          <button
-            onClick={() => setActiveTab('friends')}
-            className={`px-4 py-3 font-semibold border-b-2 transition ${activeTab === 'friends'
-                ? 'border-green-600 text-green-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-          >
-            Suggested Friends
+            <Plus size={20} />
+            Create Group
           </button>
         </div>
 
@@ -590,6 +645,59 @@ export default function GroupsPage() {
               <div className="text-center py-12">
                 <Users className="mx-auto text-gray-400 mb-4" size={48} />
                 <p className="text-gray-600 text-lg font-medium">No users available</p>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* Search Users Tab */}
+        {activeTab === 'search-users' && (
+          <div>
+            <form onSubmit={handleSearchNewUsers} className="mb-8">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <input
+                  type="text"
+                  value={userSearchQuery}
+                  onChange={(e) => setUserSearchQuery(e.target.value)}
+                  placeholder="Search users by name or email..."
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 hover:border-green-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
+                />
+                <button 
+                  type="submit" 
+                  disabled={searchingUsers}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-semibold transition disabled:opacity-50"
+                >
+                  Search
+                </button>
+              </div>
+            </form>
+
+            {searchingUsers && (
+              <div className="flex items-center justify-center py-12">
+                <Loader className="animate-spin text-green-600 mr-3" size={24} />
+                <p className="text-gray-600">Searching users...</p>
+              </div>
+            )}
+
+            {!searchingUsers && userSearchResults.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {userSearchResults.map(result => (
+                  <ProfileCard
+                    key={result._id}
+                    user={result}
+                    onClick={() => navigate(`/profile/${result._id}`)}
+                    friendStatus={friendStatuses[result._id] || 'none'}
+                    onAddFriend={handleAddFriend}
+                    onAcceptRequest={handleAcceptRequest}
+                  />
+                ))}
+              </div>
+            ) : !searchingUsers && userSearchQuery ? (
+              <div className="text-center py-12">
+                <Users className="mx-auto text-gray-400 mb-4" size={48} />
+                <p className="text-gray-600 text-lg font-medium">No users found</p>
+                <p className="text-gray-500">Try a different search term</p>
               </div>
             ) : null}
           </div>

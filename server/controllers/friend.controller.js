@@ -171,6 +171,25 @@ export const getFriends = async (req, res) => {
     }
 };
 
+// GET /api/friends/user/:userId
+export const getFriendsOfUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const friends = await UserRelationship.getFriends(userId);
+
+        // Enrich with province info for display
+        const enriched = await Promise.all(friends.map(async (f) => {
+            const profile = await UserProfile.findOne({ userId: f.userId }).select("province").lean();
+            return { ...f, province: profile?.province || "" };
+        }));
+
+        res.status(200).json({ success: true, friends: enriched });
+    } catch (error) {
+        console.error("Error in getFriendsOfUser:", error);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
+
 // GET /api/friends/status/:targetUserId
 export const getFriendStatus = async (req, res) => {
     try {

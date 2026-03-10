@@ -7,6 +7,7 @@ import {
     removeFriend,
     getFriendRequests,
     getFriends,
+    getFriendsOfUser,
     getFriendStatus,
     blockUser,
     unblockUser
@@ -37,8 +38,11 @@ router.delete("/:friendId", verifyToken, removeFriend);
 // Get friend requests (sent and received)
 router.get("/requests", verifyToken, getFriendRequests);
 
-// Get friends list
+// Get friends list (logged-in user)
 router.get("/", verifyToken, getFriends);
+
+// Get friends list of a specific user
+router.get("/user/:userId", getFriendsOfUser);
 
 // Get friend status with specific user
 router.get("/status/:targetUserId", verifyToken, getFriendStatus);

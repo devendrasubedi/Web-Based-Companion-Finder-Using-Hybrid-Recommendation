@@ -66,7 +66,7 @@ function ProfilePage() {
           // Fetch friend status, their friends list, and their interactions in parallel
           const [statusRes, friendsRes, interactionsRes] = await Promise.allSettled([
             axios.get(`/api/friends/status/${id}`),
-            axios.get('/api/friends/'),
+            axios.get(`/api/friends/user/${id}`),
             axios.get(`/api/users/${id}/interactions`),
           ]);
 

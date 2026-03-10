@@ -292,7 +292,7 @@ async def run_all_trail_recs():
 
 @app.get("/test/{user_id}")
 async def test_trail_recs(user_id: str):
-    """DEBUG: See CBF + CF + hybrid trail scores separately."""
+    """DEBUG: See hybrid trail recommendations for a user."""
     from data_loader import (
         load_trails, load_single_profile, load_all_interactions,
         load_all_relationships, build_friend_trail_sets,
@@ -326,9 +326,6 @@ async def test_trail_recs(user_id: str):
     friend_trails = friend_trail_sets.get(uid_str, set())
     recommendations = _blend_scores(cbf_scores, cf_scores, alpha, excluded, friend_trails)
 
-    top_cbf = sorted(cbf_scores.items(), key=lambda x: x[1][0], reverse=True)[:10]
-    top_cf = sorted(cf_scores.items(), key=lambda x: x[1], reverse=True)[:10]
-
     return {
         "user_id": user_id,
         "profile": {
@@ -347,15 +344,7 @@ async def test_trail_recs(user_id: str):
             "friends_count": len(friends_map.get(uid_str, set())),
             "excluded_trails": len(excluded),
         },
-        "top_10_cbf_only": [
-            {"trail": trail_names.get(str(tid), str(tid)), "score": round(s, 4), "reasons": r}
-            for tid, (s, r) in top_cbf
-        ],
-        "top_10_cf_only": [
-            {"trail": trail_names.get(str(tid), str(tid)), "score": round(s, 4)}
-            for tid, s in top_cf
-        ],
-        "final_recommendations": [
+        "hybrid_recommendations": [
             {"rank": i + 1, "trail": trail_names.get(r["itemId"], r["itemId"]),
              "score": r["score"], "reason": r["reason"]}
             for i, r in enumerate(recommendations[:20])
@@ -383,7 +372,7 @@ async def run_all_companion_recs():
 
 @app.get("/test/companions/{user_id}")
 async def test_companion_recs(user_id: str):
-    """DEBUG: See CBF + CF + hybrid companion scores separately."""
+    """DEBUG: See hybrid companion recommendations for a user."""
     from data_loader import load_profiles_df, load_interactions_df, load_relationships_df, load_trails
     from user_content_based import compute_user_cbf_matrix
     from user_collaborative import (
@@ -411,12 +400,6 @@ async def test_companion_recs(user_id: str):
 
     interaction_counts = get_interaction_counts(interactions_df, user_ids)
     alpha = compute_user_alpha(interaction_counts.get(user_id, 0))
-
-    cbf_row = cbf_matrix[target_idx]
-    cf_row = cf_matrix[target_idx]
-
-    top_cbf_idx = cbf_row.argsort()[::-1][:10]
-    top_cf_idx = cf_row.argsort()[::-1][:10]
 
     friends_map, blocked_map = _build_social_maps(relationships_df)
 
@@ -448,23 +431,7 @@ async def test_companion_recs(user_id: str):
             "cf_weight": alpha,
             "friends_count": len(friends_map.get(user_id, set())),
         },
-        "top_10_cbf_only": [
-            {
-                "user": user_ids[j],
-                "name": profiles_df.iloc[j].get("name", "Unknown"),
-                "score": round(float(cbf_row[j]), 4),
-            }
-            for j in top_cbf_idx if cbf_row[j] > 0
-        ],
-        "top_10_cf_only": [
-            {
-                "user": user_ids[j],
-                "name": profiles_df.iloc[j].get("name", "Unknown"),
-                "score": round(float(cf_row[j]), 4),
-            }
-            for j in top_cf_idx if cf_row[j] > 0
-        ],
-        "final_recommendations": [
+        "hybrid_recommendations": [
             {
                 "rank": i + 1,
                 "user": r["itemId"],
