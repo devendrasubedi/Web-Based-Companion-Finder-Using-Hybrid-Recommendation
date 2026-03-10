@@ -12,7 +12,7 @@ import { useAuthStore } from '../../store/authStore';
 
 axios.defaults.withCredentials = true;
 
-const ChatContainer = () => {
+const ChatContainer = ({ initialConversationId }) => {
     const { socket, isConnected } = useSocket();
     const { user } = useAuthStore();
     const {
@@ -44,6 +44,16 @@ const ChatContainer = () => {
         fetchConversations();
         fetchFriends();
     }, []);
+
+    // Auto-select conversation if initialConversationId is provided
+    useEffect(() => {
+        if (initialConversationId && conversations.length > 0 && !activeConversation) {
+            const targetConversation = conversations.find(c => c._id === initialConversationId);
+            if (targetConversation) {
+                handleSelectConversation(targetConversation);
+            }
+        }
+    }, [initialConversationId, conversations]);
 
 
     // Socket event listeners are handled globally in SocketContext

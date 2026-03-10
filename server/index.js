@@ -12,6 +12,7 @@ import userRoutes from './routes/user.route.js'
 import trailRoutes from './routes/trailRoutes.js'
 import chatRoutes from './routes/chat.route.js'
 import friendRoutes from './routes/friend.route.js'
+import groupRoutes from './routes/group.route.js'
 import { initializeSocket } from './socket/socketHandler.js';
 import recommendationRoutes from './routes/recommendation.route.js'
 
@@ -71,5 +72,4 @@ const startServer = async () => {
     process.exit(1)
   }
 }
-
 startServer()

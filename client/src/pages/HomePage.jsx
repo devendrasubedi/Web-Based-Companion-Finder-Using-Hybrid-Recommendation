@@ -265,15 +265,28 @@ const HomePage = ({ userName = "Traveler" }) => {
 
             {/* Search Bar */}
             <div className="max-w-md w-full mx-auto mt-2 sm:mt-4 transform hover:scale-105 transition-transform duration-300">
-              <button
-                onClick={() => navigate('/explore')}
-                className="w-full bg-white text-left px-4 py-2.5 sm:px-5 sm:py-3 rounded-full shadow-xl flex items-center gap-3 group"
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const val = e.target.searchQuery.value.trim();
+                  if (val) {
+                    navigate(`/explore?search=${encodeURIComponent(val)}`);
+                  } else {
+                    navigate('/explore');
+                  }
+                }}
+                className="w-full bg-white px-4 py-1.5 sm:px-5 sm:py-2 rounded-full shadow-xl flex items-center gap-3 group border border-transparent focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/50"
               >
-                <Search className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                <span className="text-muted-foreground text-xs sm:text-sm md:text-base group-hover:text-foreground transition-colors">
-                  Search trails, locations...
-                </span>
-              </button>
+                <button type="submit" aria-label="Search" className="flex-shrink-0">
+                  <Search className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                </button>
+                <input 
+                  type="text" 
+                  name="searchQuery"
+                  placeholder="Search trails, locations..." 
+                  className="w-full bg-transparent border-none outline-none py-1.5 sm:py-2 text-xs sm:text-sm md:text-base text-gray-800 placeholder-gray-400"
+                />
+              </form>
             </div>
           </div>
         </div>

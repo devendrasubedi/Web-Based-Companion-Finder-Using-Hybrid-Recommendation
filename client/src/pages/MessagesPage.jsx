@@ -1,8 +1,11 @@
 import React from 'react';
+import { useParams } from 'react-router-dom';
 import { MessageCircle } from 'lucide-react';
 import ChatContainer from '../components/chat/ChatContainer';
 
 const MessagesPage = () => {
+  const { conversationId } = useParams();
+
   return (
     <div className="min-h-screen pt-24 pb-12 bg-background">
       <div className="w-full px-4 sm:px-6 lg:px-8">
@@ -19,7 +22,7 @@ const MessagesPage = () => {
 
         {/* Chat Container */}
         <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden" style={{ height: 'calc(100vh - 250px)' }}>
-          <ChatContainer />
+          <ChatContainer initialConversationId={conversationId} />
         </div>
       </div>
     </div>

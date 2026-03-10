@@ -1,12 +1,21 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import TrailCard from '../components/TrailCard';
 import axios from 'axios';
 import { Search, X, SlidersHorizontal, MapPin, Calendar, Wallet, Mountain, Frown } from 'lucide-react';
 
 const ExploreSearchPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const sq = params.get('q') || params.get('search');
+    if (sq) {
+      setSearchQuery(decodeURIComponent(sq));
+    }
+  }, [location.search]);
   const [selectedProvince, setSelectedProvince] = useState('All');
   const [selectedDifficulty, setSelectedDifficulty] = useState('All');
   const [selectedDays, setSelectedDays] = useState('All');
@@ -292,6 +301,33 @@ const ExploreSearchPage = () => {
     return matches;
   });
 
+  // Sort by relevance
+  const sortedFilteredTrails = [...filteredTrails].sort((a, b) => {
+    if (!searchQuery) return 0;
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return 0;
+    
+    const getScore = (trail) => {
+      let score = 0;
+      const name = (trail.name || '').toLowerCase();
+      if (name === query) score += 100;
+      else if (name.startsWith(query)) score += 50;
+      else if (name.includes(query)) score += 20;
+
+      const locationStr = trail.location && typeof trail.location === 'object' 
+        ? (trail.location.provinces?.join(' ') || '') + ' ' + (trail.location.districts?.join(' ') || '') + ' ' + (trail.location.start || '') + ' ' + (trail.location.end || '')
+        : String(trail.location || '');
+      if (locationStr.toLowerCase().includes(query)) score += 10;
+
+      if (trail.description && trail.description.toLowerCase().includes(query)) score += 5;
+
+      return score;
+    };
+
+    return getScore(b) - getScore(a);
+  });
+
+
   // Debug logging
   useEffect(() => {
     console.log('===== 🔍 FILTER DEBUG =====');
@@ -507,12 +543,12 @@ const ExploreSearchPage = () => {
 
         {/* Results */}
         <div className="mb-4 text-gray-500">
-          Found {filteredTrails.length} {filteredTrails.length === 1 ? 'adventure' : 'adventures'}
+          Found {sortedFilteredTrails.length} {sortedFilteredTrails.length === 1 ? 'adventure' : 'adventures'}
         </div>
 
-        {filteredTrails.length > 0 ? (
+        {sortedFilteredTrails.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredTrails.map((trail) => (
+            {sortedFilteredTrails.map((trail) => (
               <TrailCard
                 key={trail.id}
                 trail={trail}

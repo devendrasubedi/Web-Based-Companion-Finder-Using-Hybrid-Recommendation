@@ -5,7 +5,8 @@ import {
     toggleSavedHike,
     toggleCompletedHike,
     getUserInteractions,
-    getPublicUserInteractions
+    getPublicUserInteractions,
+    getSuggestedFriends
 } from "../controllers/user.controller.js";
 import { verifyToken } from "../middleware/verifyToken.js";
 
@@ -16,6 +17,9 @@ router.get("/", getAllUsers);
 
 // Get own interactions (saved + completed hikes)
 router.get("/interactions", verifyToken, getUserInteractions);
+
+// Get suggested friends
+router.get("/suggested/friends", verifyToken, getSuggestedFriends);
 
 // Toggle saved hike
 router.post("/saved-hikes", verifyToken, toggleSavedHike);
