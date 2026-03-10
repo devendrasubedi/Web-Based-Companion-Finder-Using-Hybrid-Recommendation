@@ -1,63 +1,58 @@
 """
-METRICS — Evaluation numbers for report/viva.
-Coverage, avg score, alpha distribution, personalization.
+USER METRICS — Evaluation numbers for companion recommendations.
+Queries Recommendation_Cache where type="companions".
 """
 
 import logging
 from data_loader import get_db
 
-logger = logging.getLogger("rec.metrics")
+logger = logging.getLogger("rec.user_metrics")
 
 
-def compute_coverage():
-    """What % of trails appear in at least one user's top 50?"""
+def compute_user_coverage():
+    """What % of users appear in at least one companion list?"""
     db = get_db()
     pipeline = [
-        {"$match": {"type": "trails"}},
+        {"$match": {"type": "companions"}},
         {"$unwind": "$recommendations"},
         {"$group": {"_id": None, "unique": {"$addToSet": "$recommendations.itemId"}}}
     ]
     result = list(db["Recommendation_Cache"].aggregate(pipeline))
     if result:
         covered = len(result[0]["unique"])
-        total = db["Trails_metadata"].count_documents({})
-        pct = round(covered / total * 100, 1)
-        logger.info(f"Coverage: {covered}/{total} ({pct}%)")
+        total = db["userprofiles"].count_documents({})
+        pct = round(covered / max(total, 1) * 100, 1)
         return {"covered": covered, "total": total, "percent": pct}
     return {"covered": 0, "total": 0, "percent": 0}
 
 
-def compute_avg_score():
-    """Average recommendation score across all users."""
+def compute_user_avg_score():
+    """Average companion recommendation score."""
     db = get_db()
     pipeline = [
-        {"$match": {"type": "trails"}},
+        {"$match": {"type": "companions"}},
         {"$unwind": "$recommendations"},
         {"$group": {"_id": None, "avg": {"$avg": "$recommendations.score"}}}
     ]
     result = list(db["Recommendation_Cache"].aggregate(pipeline))
-    avg = round(result[0]["avg"], 4) if result else 0
-    logger.info(f"Avg score: {avg}")
-    return avg
+    return round(result[0]["avg"], 4) if result else 0
 
 
-def compute_alpha_distribution():
+def compute_user_model_distribution():
     """Count of users per model version."""
     db = get_db()
     pipeline = [
-        {"$match": {"type": "trails"}},
+        {"$match": {"type": "companions"}},
         {"$group": {"_id": "$modelVersion", "count": {"$sum": 1}}}
     ]
-    result = {r["_id"]: r["count"] for r in db["Recommendation_Cache"].aggregate(pipeline)}
-    logger.info(f"Model distribution: {result}")
-    return result
+    return {r["_id"]: r["count"] for r in db["Recommendation_Cache"].aggregate(pipeline)}
 
 
-def compute_personalization():
-    """Jaccard distance between users' top-10 lists. Higher = more personalized."""
+def compute_user_personalization():
+    """Jaccard distance between users' top-10 companion lists."""
     db = get_db()
     docs = list(db["Recommendation_Cache"].find(
-        {"type": "trails"},
+        {"type": "companions"},
         {"recommendations": {"$slice": 10}}
     ).limit(200))
 
@@ -73,15 +68,14 @@ def compute_personalization():
                 jaccard = len(set_a & set_b) / len(set_a | set_b)
                 distances.append(1 - jaccard)
 
-    avg = round(sum(distances) / len(distances), 4) if distances else 0
-    logger.info(f"Personalization: {avg}")
-    return avg
+    return round(sum(distances) / len(distances), 4) if distances else 0
 
 
-def run_all_metrics():
+def run_user_metrics():
+    """Return all user metrics as one dict."""
     return {
-        "coverage": compute_coverage(),
-        "avg_score": compute_avg_score(),
-        "alpha_distribution": compute_alpha_distribution(),
-        "personalization": compute_personalization(),
+        "coverage": compute_user_coverage(),
+        "avg_score": compute_user_avg_score(),
+        "model_distribution": compute_user_model_distribution(),
+        "personalization": compute_user_personalization(),
     }

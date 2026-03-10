@@ -12,6 +12,11 @@ function triggerPythonRecompute(userId) {
         .catch(() => { /* Python may be down — silently ignore */ });
 }
 
+function triggerPythonRecomputeCompanions(userId) {
+    axios.post(`${PYTHON_API}/run/companions/${userId}`, {}, { timeout: 5000 })
+        .catch(() => { /* Python may be down — silently ignore */ });
+}
+
 // Normalize a raw Trail doc to the same shape as getAllTrails returns
 function normalizeTrail(t, reason = "") {
     return {
@@ -137,7 +142,9 @@ export const getCompanionRecommendations = async (req, res) => {
             });
         }
 
-        // Cache miss — fall back to all users enriched with profile
+        // Cache miss — trigger async recompute and fall back to all users enriched with profile
+        triggerPythonRecomputeCompanions(userId);
+
         const users = await User.find({}).select("-password").lean();
         const profiles = await UserProfile.find({
             userId: { $in: users.map(u => u._id) },
