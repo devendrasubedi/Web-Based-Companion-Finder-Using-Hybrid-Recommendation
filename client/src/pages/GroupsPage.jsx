@@ -3,16 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Plus, MapPin, Users, Calendar, AlertCircle, Loader, Filter, ChevronDown, X } from 'lucide-react';
 import CreateGroupModal from '../components/CreateGroupModal';
 import GroupCard from '../components/GroupCard';
-import UserCard from '../components/UserCard';
+import ProfileCard from '../components/ProfileCard';
 import { useAuthStore } from '../store/authStore';
+import { useAuthGuard } from '../hooks/useAuthGuard';
+import axios from 'axios';
 
 export default function GroupsPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { canPerformAction } = useAuthGuard();
 
   // State for groups
   const [groups, setGroups] = useState([]);
   const [suggestedFriends, setSuggestedFriends] = useState([]);
+  const [friendStatuses, setFriendStatuses] = useState({});
   const [userGroups, setUserGroups] = useState([]);
   const [trailsForDropdown, setTrailsForDropdown] = useState([]);
 
@@ -85,7 +89,27 @@ export default function GroupsPage() {
       if (!response.ok) throw new Error('Failed to fetch friends');
 
       const data = await response.json();
-      setSuggestedFriends(data.friends || []);
+      const usersList = data.friends || [];
+      setSuggestedFriends(usersList);
+
+      // Load friend statuses
+      if (user && usersList.length > 0) {
+        const otherIds = usersList
+          .filter(u => String(u._id) !== String(user._id || user.id))
+          .map(u => u._id);
+        const statusResults = await Promise.allSettled(
+          otherIds.map(uid =>
+            axios.get(`/api/friends/status/${uid}`, {
+              headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+            }).then(r => ({ uid, status: r.data.status }))
+          )
+        );
+        const statuses = {};
+        statusResults.forEach(r => {
+          if (r.status === 'fulfilled') statuses[r.value.uid] = r.value.status;
+        });
+        setFriendStatuses(statuses);
+      }
     } catch (err) {
       console.error('Error fetching friends:', err);
     }
@@ -177,7 +201,7 @@ export default function GroupsPage() {
 
       const data = await response.json();
       console.log("✅ Group created successfully:", data);
-      
+
       // Close modal
       setShowCreateModal(false);
 
@@ -226,32 +250,49 @@ export default function GroupsPage() {
     }
   };
 
-  // Handle connect with friend
-  const handleConnectFriend = async (friendId) => {
-    try {
-      setLoading(true);
+  const handleAddFriend = async (userId, userName) => {
+    if (!canPerformAction('send friend requests')) return;
 
-      // Create or get direct conversation
-      const response = await fetch('/api/chat/conversations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ recipientId: friendId })
+    try {
+      const response = await axios.post('/api/friends/request', {
+        receiverId: userId,
+        receiverName: userName
+      }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
 
-      if (!response.ok) throw new Error('Failed to create conversation');
+      if (response.data.success) {
+        setFriendStatuses(prev => ({
+          ...prev,
+          [userId]: 'request_sent'
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to send friend request:", error);
+      alert(error.response?.data?.message || "Failed to send friend request");
+    }
+  };
 
-      const data = await response.json();
+  const handleAcceptRequest = async (userId, userName) => {
+    if (!canPerformAction('manage friend requests')) return;
 
-      // Navigate to messages
-      navigate(`/messages/${data.conversation._id}`);
-    } catch (err) {
-      console.error('Error connecting with friend:', err);
-      setError('Failed to connect. Please try again.');
-    } finally {
-      setLoading(false);
+    try {
+      const response = await axios.post('/api/friends/accept', {
+        senderId: userId,
+        senderName: userName
+      }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+
+      if (response.data.success) {
+        setFriendStatuses(prev => ({
+          ...prev,
+          [userId]: 'friends'
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to accept friend request:", error);
+      alert("Failed to accept friend request");
     }
   };
 
@@ -325,31 +366,28 @@ export default function GroupsPage() {
         <div className="flex gap-4 mb-8 border-b border-slate-200">
           <button
             onClick={() => setActiveTab('browse')}
-            className={`px-4 py-3 font-semibold border-b-2 transition ${
-              activeTab === 'browse'
+            className={`px-4 py-3 font-semibold border-b-2 transition ${activeTab === 'browse'
                 ? 'border-green-600 text-green-600'
                 : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
+              }`}
           >
             Browse Groups
           </button>
           <button
             onClick={() => setActiveTab('my-groups')}
-            className={`px-4 py-3 font-semibold border-b-2 transition ${
-              activeTab === 'my-groups'
+            className={`px-4 py-3 font-semibold border-b-2 transition ${activeTab === 'my-groups'
                 ? 'border-green-600 text-green-600'
                 : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
+              }`}
           >
             My Groups {userGroups.length > 0 && `(${userGroups.length})`}
           </button>
           <button
             onClick={() => setActiveTab('friends')}
-            className={`px-4 py-3 font-semibold border-b-2 transition ${
-              activeTab === 'friends'
+            className={`px-4 py-3 font-semibold border-b-2 transition ${activeTab === 'friends'
                 ? 'border-green-600 text-green-600'
                 : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
+              }`}
           >
             Suggested Friends
           </button>
@@ -431,9 +469,8 @@ export default function GroupsPage() {
                           setTrailFilterQuery('');
                           setShowTrailDropdown(false);
                         }}
-                        className={`w-full text-left px-4 py-2.5 text-sm hover:bg-green-50 transition ${
-                          !selectedTrailFilter ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-700'
-                        }`}
+                        className={`w-full text-left px-4 py-2.5 text-sm hover:bg-green-50 transition ${!selectedTrailFilter ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-700'
+                          }`}
                       >
                         All Trails
                       </button>
@@ -452,9 +489,8 @@ export default function GroupsPage() {
                                 setTrailFilterQuery('');
                                 setShowTrailDropdown(false);
                               }}
-                              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-green-50 transition ${
-                                selectedTrailFilter === trailName ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-700'
-                              }`}
+                              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-green-50 transition ${selectedTrailFilter === trailName ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-700'
+                                }`}
                             >
                               {trailName}
                             </button>
@@ -540,10 +576,13 @@ export default function GroupsPage() {
             {!loading && suggestedFriends.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {suggestedFriends.map(friend => (
-                  <UserCard
+                  <ProfileCard
                     key={friend._id}
                     user={friend}
-                    onConnect={handleConnectFriend}
+                    onClick={() => navigate(`/profile/${friend._id}`)}
+                    friendStatus={friendStatuses[friend._id] || 'none'}
+                    onAddFriend={handleAddFriend}
+                    onAcceptRequest={handleAcceptRequest}
                   />
                 ))}
               </div>
