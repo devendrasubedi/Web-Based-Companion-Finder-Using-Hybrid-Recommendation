@@ -25,7 +25,17 @@ export const sendFriendRequest = async (req, res) => {
             getDisplayName(receiverId)
         ]);
 
-        await UserRelationship.sendRequest(senderId, receiverId, senderName, receiverName);
+        const newRequest = await UserRelationship.sendRequest(senderId, receiverId, senderName, receiverName);
+
+        // Emit socket event to the receiver
+        const io = req.app.get("io");
+        if (io) {
+            io.to(receiverId.toString()).emit("new_friend_request", {
+                senderId,
+                senderName,
+                timestamp: new Date()
+            });
+        }
 
         res.status(200).json({ success: true, message: "Friend request sent successfully" });
     } catch (error) {
@@ -167,6 +177,25 @@ export const getFriends = async (req, res) => {
         res.status(200).json({ success: true, friends: enriched });
     } catch (error) {
         console.error("Error in getFriends:", error);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
+
+// GET /api/friends/user/:userId
+export const getFriendsOfUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const friends = await UserRelationship.getFriends(userId);
+
+        // Enrich with province info for display
+        const enriched = await Promise.all(friends.map(async (f) => {
+            const profile = await UserProfile.findOne({ userId: f.userId }).select("province").lean();
+            return { ...f, province: profile?.province || "" };
+        }));
+
+        res.status(200).json({ success: true, friends: enriched });
+    } catch (error) {
+        console.error("Error in getFriendsOfUser:", error);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };

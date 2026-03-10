@@ -136,6 +136,7 @@ function App() {
 					{/* These pages require login */}
 					<Route path='/groups' element={<GroupsPage />} />
 					<Route path='/messages' element={<MessagesPage />} />
+					<Route path='/messages/:conversationId' element={<MessagesPage />} />
 					<Route path='/preferences' element={<PreferencesPage />} />
 				</Route>
 

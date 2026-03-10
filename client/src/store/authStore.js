@@ -12,6 +12,10 @@ export const useAuthStore = create((set) => ({
 	isLoading: false,
 	isCheckingAuth: true,
 	message: null,
+	pendingRequests: 0,
+
+	setPendingRequests: (count) => set({ pendingRequests: count }),
+	incrementPendingRequests: () => set((state) => ({ pendingRequests: state.pendingRequests + 1 })),
 
 	signup: async (email, password, name, dob, phone, province, district, gender) => {
 		set({ isLoading: true, error: null });

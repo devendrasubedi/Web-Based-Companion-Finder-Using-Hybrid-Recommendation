@@ -13,7 +13,7 @@ import ProfileFriendRequests from '../components/profile/ProfileFriendRequests';
 
 function ProfilePage() {
   const { id } = useParams();
-  const { user: authUser, logout, updateProfile, getUserProfile } = useAuthStore();
+  const { user: authUser, logout, updateProfile, getUserProfile, setPendingRequests } = useAuthStore();
   const navigate = useNavigate();
 
   const [user, setUser] = useState(null);
@@ -48,7 +48,9 @@ function ProfilePage() {
             ]);
 
             if (reqRes.status === 'fulfilled' && reqRes.value.data.success) {
-              setFriendRequests(reqRes.value.data.received || []);
+              const reqs = reqRes.value.data.received || [];
+              setFriendRequests(reqs);
+              setPendingRequests(reqs.length);
             }
             if (friendsRes.status === 'fulfilled' && friendsRes.value.data.success) {
               setFriends(friendsRes.value.data.friends || []);
@@ -66,7 +68,7 @@ function ProfilePage() {
           // Fetch friend status, their friends list, and their interactions in parallel
           const [statusRes, friendsRes, interactionsRes] = await Promise.allSettled([
             axios.get(`/api/friends/status/${id}`),
-            axios.get('/api/friends/'),
+            axios.get(`/api/friends/user/${id}`),
             axios.get(`/api/users/${id}/interactions`),
           ]);
 
@@ -106,7 +108,11 @@ function ProfilePage() {
     try {
       const response = await axios.post('/api/friends/accept', { senderId });
       if (response.data.success) {
-        setFriendRequests(prev => prev.filter(req => String(req.userId) !== String(senderId)));
+        setFriendRequests(prev => {
+          const next = prev.filter(req => String(req.userId) !== String(senderId));
+          setPendingRequests(next.length);
+          return next;
+        });
         // Refresh friends list
         const friendsRes = await axios.get('/api/friends/');
         if (friendsRes.data.success) setFriends(friendsRes.data.friends || []);
@@ -121,7 +127,11 @@ function ProfilePage() {
     try {
       const response = await axios.post('/api/friends/reject', { senderId });
       if (response.data.success) {
-        setFriendRequests(prev => prev.filter(req => String(req.userId) !== String(senderId)));
+        setFriendRequests(prev => {
+          const next = prev.filter(req => String(req.userId) !== String(senderId));
+          setPendingRequests(next.length);
+          return next;
+        });
       }
     } catch (error) {
       console.error("Failed to reject friend request:", error);
@@ -228,7 +238,7 @@ function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen pt-24 pb-12 px-4 sm:px-6 lg:px-8 bg-background">
+    <div className="min-h-screen pt-4 pb-12 px-4 sm:px-6 lg:px-8 bg-background">
       <div className="max-w-6xl mx-auto space-y-8">
 
         {/* 1. Profile Details */}

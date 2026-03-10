@@ -11,14 +11,31 @@ function computeScore({ isSaved = false, isCompleted = false, rating = null }) {
 // ── GET /api/users/ ──────────────────────────────────────────────────────────
 export const getAllUsers = async (req, res) => {
     try {
-        const users = await User.find({}).select("_id name email").limit(20);
+        const { search } = req.query;
+        let query = {};
+        
+        if (search && search.trim().length > 0) {
+            query = {
+                $or: [
+                    { name: { $regex: search, $options: 'i' } },
+                    { email: { $regex: search, $options: 'i' } },
+                    { bio: { $regex: search, $options: 'i' } },
+                    { province: { $regex: search, $options: 'i' } },
+                    { district: { $regex: search, $options: 'i' } }
+                ]
+            };
+        }
 
-        const usersWithProfile = await Promise.all(users.map(async (user) => {
-            const profile = await UserProfile.findOne({ userId: user._id })
-                .select("province district dob gender languagesKnown").lean();
+        // Query the UserProfile collection directly
+        const profiles = await UserProfile.find(query)
+            .select("-__v -updatedAt -createdAt")
+            .limit(20)
+            .lean();
 
+        // Format the output to match what the frontend cards expect
+        const formattedProfiles = profiles.map(profile => {
             let age = "";
-            if (profile?.dob) {
+            if (profile.dob) {
                 const birthDate = new Date(profile.dob);
                 if (!isNaN(birthDate.getTime())) {
                     const today = new Date();
@@ -29,16 +46,21 @@ export const getAllUsers = async (req, res) => {
             }
 
             return {
-                ...user._doc,
-                province: profile?.province || "",
-                district: profile?.district || "",
+                _id: profile.userId, // Map userId back to _id for consistency with old User auth objects
+                name: profile.name,
+                email: profile.email || "",
+                bio: profile.bio || "",
+                province: profile.province || "",
+                district: profile.district || "",
                 age,
-                gender: profile?.gender || "",
-                languages: profile?.languagesKnown || []
+                gender: profile.gender || "",
+                languages: profile.languagesKnown || [],
+                profilePicture: profile.profilePicture || null,
+                experienceLevel: profile.experienceLevel || ""
             };
-        }));
+        });
 
-        res.status(200).json(usersWithProfile);
+        res.status(200).json(formattedProfiles);
     } catch (error) {
         console.error("Error in getAllUsers:", error);
         res.status(500).json({ success: false, message: error.message });
@@ -46,17 +68,23 @@ export const getAllUsers = async (req, res) => {
 };
 
 // ── GET /api/users/:id ──────────────────────────────────────────────────────
+// Used by ProfilePage when clicking on a companion's card.
+// Note: `id` here is the userId (ObjectId string), which is the primary key for UserProfile.
 export const getUserProfile = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const user = await User.findById(id).select("-password").lean();
-        if (!user) return res.status(404).json({ success: false, message: "User not found" });
-
+        // 1. Fetch from UserProfile (lives in auth_db, where recommendations come from)
         const userProfile = await UserProfile.findOne({ userId: id }).lean();
+        if (!userProfile) {
+            return res.status(404).json({ success: false, message: "User profile not found" });
+        }
+
+        // 2. Opt-fetch from User (default db) for email
+        const user = await User.findById(id).select("-password").lean() || {};
 
         let age = null;
-        if (userProfile?.dob) {
+        if (userProfile.dob) {
             const today = new Date();
             const birthDate = new Date(userProfile.dob);
             age = today.getFullYear() - birthDate.getFullYear();
@@ -64,9 +92,10 @@ export const getUserProfile = async (req, res) => {
             if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
         }
 
+        // Merge, ensuring _id is always the semantic userId
         res.status(200).json({
             success: true,
-            user: { ...(userProfile || {}), ...user, age }
+            user: { ...user, ...userProfile, _id: String(userProfile.userId), id: String(userProfile.userId), age }
         });
     } catch (error) {
         console.error("Error in getUserProfile:", error);
@@ -221,6 +250,47 @@ export const toggleCompletedHike = async (req, res) => {
         });
     } catch (error) {
         console.error("Error in toggleCompletedHike:", error);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
+
+// ── GET /api/users/suggested-friends ────────────────────────────────────────
+// Fetch users for suggested friends (placeholder for recommendation engine)
+export const getSuggestedFriends = async (req, res) => {
+    try {
+        const currentUserId = req.userId;
+        const { limit = 10 } = req.query;
+
+        // Fetch users excluding the current user
+        const users = await User.find({ _id: { $ne: currentUserId } })
+            .select("_id name email")
+            .limit(parseInt(limit))
+            .lean();
+
+        // Fetch profiles for additional info
+        const usersWithProfile = await Promise.all(users.map(async (user) => {
+            const profile = await UserProfile.findOne({ userId: user._id })
+                .select("profileImage province district bio  languagesKnown")
+                .lean();
+
+            return {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                profileImage: profile?.profileImage || null,
+                province: profile?.province || "",
+                district: profile?.district || "",
+                bio: profile?.bio || "",
+                languages: profile?.languagesKnown || []
+            };
+        }));
+
+        res.status(200).json({
+            success: true,
+            friends: usersWithProfile
+        });
+    } catch (error) {
+        console.error("Error in getSuggestedFriends:", error);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };

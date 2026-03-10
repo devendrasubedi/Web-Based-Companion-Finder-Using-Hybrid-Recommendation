@@ -60,8 +60,9 @@ export const signup = async (req, res) => {
             success: true,
             message: "User created successfully",
             user: {
-                ...userProfile._doc,
                 ...user._doc,
+                ...userProfile._doc,
+                _id: user._id,
                 password: undefined
             }
         })
@@ -96,8 +97,9 @@ export const verifyEmail = async (req, res) => {
             success: true,
             message: "email verified sucessfully",
             user: {
-                ...(userProfile ? userProfile._doc : {}),
                 ...user._doc,
+                ...(userProfile ? userProfile._doc : {}),
+                _id: user._id,
                 password: undefined,
             }
 
@@ -129,8 +131,9 @@ export const login = async (req, res) => {
             sucess: true,
             message: "Logged in sucessfully",
             user: {
-                ...userProfile?._doc,
                 ...user._doc,
+                ...userProfile?._doc,
+                _id: user._id,
                 password: undefined,
             }
         });
@@ -218,8 +221,9 @@ export const checkAuth = async (req, res) => {
         res.status(200).json({
             sucess: true,
             user: {
-                ...(userProfile ? userProfile._doc : {}),
                 ...user._doc,
+                ...(userProfile ? userProfile._doc : {}),
+                _id: user._id,
                 password: undefined,
             }
         })
@@ -254,8 +258,10 @@ export const savePreferences = async (req, res) => {
             success: true,
             message: "Preferences saved successfully",
             user: {
+                ...user._doc,
                 ...userProfile._doc,
-                ...user._doc
+                _id: user._id,
+                password: undefined
             }
         });
 
@@ -296,8 +302,9 @@ export const updateProfile = async (req, res) => {
             success: true,
             message: "Profile updated successfully",
             user: {
-                ...(userProfile ? userProfile._doc : {}),
                 ...user._doc,
+                ...(userProfile ? userProfile._doc : {}),
+                _id: user._id,
                 password: undefined,
             }
         });
