@@ -47,6 +47,8 @@ app.use("/api/chat", chatRoutes);
 console.log('Chat routes mounted at /api/chat');
 app.use("/api/friends", friendRoutes);
 console.log('Friend routes mounted at /api/friends');
+app.use("/api/groups", groupRoutes);
+console.log('Group routes mounted at /api/groups');
 app.use("/api/recommendations", recommendationRoutes);
 console.log('Recommendation routes mounted at /api/recommendations');
 
