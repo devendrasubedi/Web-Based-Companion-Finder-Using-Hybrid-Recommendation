@@ -9,6 +9,7 @@ import {
     getFriends,
     getFriendsOfUser,
     getFriendStatus,
+    getBatchFriendStatus,
     blockUser,
     unblockUser
 } from "../controllers/friend.controller.js";
@@ -46,5 +47,8 @@ router.get("/user/:userId", getFriendsOfUser);
 
 // Get friend status with specific user
 router.get("/status/:targetUserId", verifyToken, getFriendStatus);
+
+// Get batch friend statuses
+router.post("/status/batch", verifyToken, getBatchFriendStatus);
 
 export default router;

@@ -110,18 +110,19 @@ export default function GroupsPage() {
         const otherIds = displayList
           .filter(u => String(u._id) !== String(user._id || user.id))
           .map(u => u._id);
-        const statusResults = await Promise.allSettled(
-          otherIds.map(uid =>
-            axios.get(`/api/friends/status/${uid}`, {
+          
+        if (otherIds.length > 0) {
+          try {
+            const res = await axios.post('/api/friends/status/batch', { targetUserIds: otherIds }, {
               headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            }).then(r => ({ uid, status: r.data.status }))
-          )
-        );
-        const statuses = {};
-        statusResults.forEach(r => {
-          if (r.status === 'fulfilled') statuses[r.value.uid] = r.value.status;
-        });
-        setFriendStatuses(statuses);
+            });
+            if (res.data.success) {
+              setFriendStatuses(res.data.statuses);
+            }
+          } catch (err) {
+            console.error("Failed to fetch batch friend statuses", err);
+          }
+        }
       }
     } catch (err) {
       console.error('Error fetching friends:', err);
@@ -163,18 +164,19 @@ export default function GroupsPage() {
         const otherIds = data
           .filter(u => String(u._id) !== String(user._id || user.id))
           .map(u => u._id);
-        const statusResults = await Promise.allSettled(
-          otherIds.map(uid =>
-            axios.get(`/api/friends/status/${uid}`, {
+          
+        if (otherIds.length > 0) {
+          try {
+            const res = await axios.post('/api/friends/status/batch', { targetUserIds: otherIds }, {
               headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            }).then(r => ({ uid, status: r.data.status }))
-          )
-        );
-        const statuses = {};
-        statusResults.forEach(r => {
-          if (r.status === 'fulfilled') statuses[r.value.uid] = r.value.status;
-        });
-        setFriendStatuses(prev => ({ ...prev, ...statuses }));
+            });
+            if (res.data.success) {
+              setFriendStatuses(prev => ({ ...prev, ...res.data.statuses }));
+            }
+          } catch (err) {
+            console.error("Failed to fetch batch friend statuses", err);
+          }
+        }
       }
     } catch (err) {
       console.error('Error searching users:', err);
