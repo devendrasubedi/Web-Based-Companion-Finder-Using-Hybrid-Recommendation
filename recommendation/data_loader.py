@@ -86,7 +86,12 @@ def _temporal_decay(updated_at):
     if not updated_at:
         return 0.5  # unknown date → half weight (safe default)
 
-    now = datetime.utcnow()
+    # Normalize: MongoDB may return naive UTC datetimes on some documents.
+    # Always attach UTC so the subtraction is always aware - aware.
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
     days = (now - updated_at).total_seconds() / 86400.0
     return math.exp(-TEMPORAL_DECAY_LAMBDA * max(days, 0))
 
@@ -538,7 +543,7 @@ def write_cache_bulk(results):
         return
 
     db = get_db()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expires = now + timedelta(hours=CACHE_TTL_HOURS)
 
     ops = []

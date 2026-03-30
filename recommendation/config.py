@@ -47,7 +47,6 @@ INTEREST_TAGS = {
     },
     "cultural": {
         "cultural-site", "cultural", "heritage", "pilgrimage",
-        "priglimage",
         "village-hike", "village", "historical", "ancient-kingdom",
         "agro-tourism", "community", "cultural-walk",
         "traditional villages", "monasteries", "cultural_heritage",
@@ -70,7 +69,7 @@ INTEREST_TAGS = {
         "nature_walk", "hot_springs",
     },
     "spiritual": {
-        "pilgrimage", "priglimage",
+        "pilgrimage",
         "sanctuary", "quiet-spot", "hidden-gem",
         "off-the-beaten-path", "national-park",
         "meditation", "religious", "peace",

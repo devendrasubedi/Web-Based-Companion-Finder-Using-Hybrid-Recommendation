@@ -128,9 +128,8 @@ async def _companion_bulk():
 
 
 async def _full_bulk():
-    """Run both trail and companion bulk (called every 6 hours)."""
-    await _trail_bulk()
-    await _companion_bulk()
+    """Run both trail and companion bulk concurrently (called every 6 hours)."""
+    await asyncio.gather(_trail_bulk(), _companion_bulk())
 
 
 # ── FIX #6: Incremental Poll Loop ───────────────────────────

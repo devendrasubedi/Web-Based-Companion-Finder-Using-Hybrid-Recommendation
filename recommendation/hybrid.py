@@ -29,7 +29,7 @@ from data_loader import (
     write_cache, write_cache_bulk,
     get_active_user_ids,  # FIX #3
 )
-from trail_content_based import get_trail_cbf_scores
+from trail_content_based import get_trail_cbf_scores, get_trail_cbf_scores_from_df
 from trail_collaborative import (
     get_trail_cf_scores, compute_trail_alpha,
     get_prebuilt_cf_data,  # FIX #7
@@ -126,8 +126,8 @@ def _model_version(alpha):
         return "hybrid-cf-dominant-v1.0"
 
 
-def compute_for_user(user_id, all_interactions=None, friends_map=None,
-                     blocked_map=None, friend_trail_sets=None, prebuilt=None):
+def compute_for_user(user_id, all_interactions=None, all_excluded=None,
+                     friends_map=None, blocked_map=None, friend_trail_sets=None, prebuilt=None):
     """
     Compute trail recommendations for ONE user.
     Accepts optional prebuilt CF data (FIX #7) and shared data to avoid reloading.
@@ -149,8 +149,8 @@ def compute_for_user(user_id, all_interactions=None, friends_map=None,
 
     # Step 3: Load interactions (or use shared data from bulk)
     if all_interactions is not None:
-        excluded = set(all_interactions.get(uid_str, {}).keys())
-        interaction_count = len(excluded)
+        excluded = all_excluded.get(uid_str, set()) if all_excluded else set()
+        interaction_count = len(all_interactions.get(uid_str, {}))
     else:
         all_interactions, all_excluded = load_all_interactions()
         excluded = all_excluded.get(uid_str, set())
@@ -195,17 +195,22 @@ def compute_for_all():
     Bulk trail recomputation.
     FIX #7: Builds CF matrix ONCE before the loop.
     FIX #3: Only processes active users.
+    SPEED: Pre-builds trails DataFrame ONCE before the loop (vs. once per user).
     """
     logger.info("=" * 60)
     logger.info("TRAIL BULK RECOMPUTATION STARTED")
     logger.info("=" * 60)
 
     # Load all shared data once
+    from trail_content_based import _trails_to_df  # noqa: PLC0415
     trails = load_trails()
     profiles = load_all_profiles()
     all_interactions, all_excluded = load_all_interactions()
     friends_map, blocked_map = load_all_relationships()
     friend_trail_sets = build_friend_trail_sets(friends_map, all_interactions)
+
+    # SPEED: Convert trail list → DataFrame ONCE for all users
+    trails_df = _trails_to_df(trails) if trails else None
 
     # FIX #7: Build sparse matrix + IDF ONCE (not 5000 times)
     prebuilt = get_prebuilt_cf_data(all_interactions)
@@ -236,8 +241,8 @@ def compute_for_all():
             skipped += 1
             continue
 
-        # CBF
-        cbf_scores = get_trail_cbf_scores(profile, trails)
+        # CBF — use pre-built DataFrame (no redundant conversion)
+        cbf_scores = get_trail_cbf_scores_from_df(profile, trails_df)
 
         # CF (FIX #7: uses prebuilt matrix — no rebuild)
         interaction_count = len(all_interactions.get(uid_str, {}))
