@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Search, Mountain } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Mountain, Star } from 'lucide-react';
 import ImageWithFallback from '../components/ImageWithFallBack';
 import TrailCard from '../components/TrailCard';
 import ProfileCard from '../components/ProfileCard';
@@ -34,7 +34,9 @@ const HomePage = ({ userName = "Traveler" }) => {
   };
 
   const recommendedTrails = recTrails.slice(0, 13);
-  const popularTrails = recTrails.slice(13);
+  const topRatedTrails = [...recTrails.slice(13)].sort(
+    (a, b) => (b.rating ?? b.averageRating ?? 0) - (a.rating ?? a.averageRating ?? 0)
+  );
 
   const recommendedFriends = companions.filter(user => {
     if (!authUser) return true;
@@ -164,7 +166,7 @@ const HomePage = ({ userName = "Traveler" }) => {
           try {
             const cachedImages = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
             if (cachedImages[t._id || t.id]) return { ...t, image: cachedImages[t._id || t.id] };
-          } catch (e) {/* ignore */}
+          } catch (e) {/* ignore */ }
           return t;
         });
         setRecTrails(withCachedImages);
@@ -177,7 +179,7 @@ const HomePage = ({ userName = "Traveler" }) => {
               try {
                 const currentCache = JSON.parse(localStorage.getItem('trail_images_cache') || '{}');
                 localStorage.setItem('trail_images_cache', JSON.stringify({ ...currentCache, ...imagesMap }));
-              } catch (e) {/* ignore */}
+              } catch (e) {/* ignore */ }
               setRecTrails(prev => prev.map(t => {
                 const newImage = imagesMap[String(t._id || t.id)];
                 return newImage ? { ...t, image: newImage } : t;
@@ -193,7 +195,7 @@ const HomePage = ({ userName = "Traveler" }) => {
           const otherIds = userList
             .filter(u => String(u._id) !== String(authUser._id || authUser.id))
             .map(u => u._id);
-            
+
           if (otherIds.length > 0) {
             try {
               const res = await axios.post('/api/friends/status/batch', { targetUserIds: otherIds });
@@ -266,7 +268,7 @@ const HomePage = ({ userName = "Traveler" }) => {
 
             {/* Search Bar */}
             <div className="max-w-md w-full mx-auto mt-2 sm:mt-4 transform hover:scale-105 transition-transform duration-300">
-              <form 
+              <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   const val = e.target.searchQuery.value.trim();
@@ -281,10 +283,10 @@ const HomePage = ({ userName = "Traveler" }) => {
                 <button type="submit" aria-label="Search" className="flex-shrink-0">
                   <Search className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
                 </button>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   name="searchQuery"
-                  placeholder="Search trails, locations..." 
+                  placeholder="Search trails, locations..."
                   className="w-full bg-transparent border-none outline-none py-1.5 sm:py-2 text-xs sm:text-sm md:text-base text-gray-800 placeholder-gray-400"
                 />
               </form>
@@ -352,12 +354,15 @@ const HomePage = ({ userName = "Traveler" }) => {
           </div>
         </section>
 
-        {/* Popular Trails Horizontal Scroll */}
+        {/* Top Rated Trails Horizontal Scroll */}
         <section>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground mb-1">Popular Trails</h2>
-              <p className="text-muted-foreground text-xs sm:text-sm">Explore {popularTrails.length} more destinations</p>
+              <h2 className="flex items-center gap-2 text-lg sm:text-xl md:text-2xl font-bold text-foreground mb-1">
+                <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                Top Rated Trails
+              </h2>
+              <p className="text-muted-foreground text-xs sm:text-sm">Highest-rated trails loved by trekkers</p>
             </div>
 
             <div className="hidden md:flex gap-2">
@@ -374,7 +379,7 @@ const HomePage = ({ userName = "Traveler" }) => {
             ref={popularScrollRef}
             className="flex overflow-x-auto gap-4 pb-6 -mx-4 px-4 md:mx-0 md:px-0 hide-scrollbar snap-x snap-mandatory"
           >
-            {popularTrails.map((trail) => (
+            {topRatedTrails.map((trail) => (
               <div key={trail.id} className="w-[280px] sm:w-[320px] shrink-0 snap-center h-full">
                 <TrailCard
                   trail={trail}
