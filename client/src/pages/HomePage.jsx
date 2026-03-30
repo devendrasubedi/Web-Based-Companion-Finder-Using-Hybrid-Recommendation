@@ -193,16 +193,17 @@ const HomePage = ({ userName = "Traveler" }) => {
           const otherIds = userList
             .filter(u => String(u._id) !== String(authUser._id || authUser.id))
             .map(u => u._id);
-          const statusResults = await Promise.allSettled(
-            otherIds.map(uid =>
-              axios.get(`/api/friends/status/${uid}`).then(r => ({ uid, status: r.data.status }))
-            )
-          );
-          const statuses = {};
-          statusResults.forEach(r => {
-            if (r.status === 'fulfilled') statuses[r.value.uid] = r.value.status;
-          });
-          setFriendStatuses(statuses);
+            
+          if (otherIds.length > 0) {
+            try {
+              const res = await axios.post('/api/friends/status/batch', { targetUserIds: otherIds });
+              if (res.data.success) {
+                setFriendStatuses(res.data.statuses);
+              }
+            } catch (err) {
+              console.error("Failed to fetch batch friend statuses", err);
+            }
+          }
         }
 
       } catch (err) {

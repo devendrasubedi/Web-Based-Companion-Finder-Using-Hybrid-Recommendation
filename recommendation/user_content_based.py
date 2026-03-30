@@ -100,9 +100,11 @@ def _geo_similarity(profiles_df):
     Tier 5: fallback             → 0.2
 
     Strategy:
-      Pre-encode districts and provinces as integer codes.
-      Build NxN membership masks for each tier with broadcasting,
-      then assign scores in reverse-priority order (lowest first).
+      Build per-unique-value neighbor membership arrays, then use
+      numpy broadcast comparison — no Python loops over user pairs.
+
+    Performance: O(U × N) where U = unique provinces/districts (≤77),
+    vs the old O(N²) nested Python loop.
     """
     provinces = profiles_df["province"].values
     districts = profiles_df["district"].values
@@ -111,43 +113,49 @@ def _geo_similarity(profiles_df):
     # Start everything at fallback
     sim = np.full((n, n), 0.2)
 
-    # ── Tier 4: neighbor province ──────────────────────────────
-    # For each pair (i, j), check if province[j] is in the neighbor
-    # set of province[i].  Build a boolean N×N mask via broadcasting.
-    prov_neighbor_mask = np.zeros((n, n), dtype=bool)
-    for i, p in enumerate(provinces):
-        if not p:
-            continue
+    # ── Tier 4: neighbor province (vectorized) ─────────────────
+    # For every unique province, get its neighbor set, then mark all
+    # (i, j) pairs where province[i] has province[j] as a neighbor.
+    unique_provs = [p for p in set(provinces) if p]
+    for p in unique_provs:
         neighbors = GEO_TRAVEL_AFFINITY.get(p, set())
-        for j, q in enumerate(provinces):
-            if q and q in neighbors:
-                prov_neighbor_mask[i, j] = True
-    sim[prov_neighbor_mask] = 0.4
+        if not neighbors:
+            continue
+        # rows where province[i] == p
+        row_mask = (provinces == p)           # shape (n,)
+        # cols where province[j] in neighbors
+        col_mask = np.isin(provinces, list(neighbors))  # shape (n,)
+        sim[np.ix_(row_mask, col_mask)] = 0.4
 
     # ── Tier 3: same province ──────────────────────────────────
-    prov_codes = np.array([p if p else "__none__" for p in provinces])
+    prov_codes = np.where(
+        np.array([bool(p) for p in provinces]),
+        provinces,
+        "__none__"
+    )
     same_prov = (prov_codes[:, None] == prov_codes[None, :])
-    has_prov = (prov_codes != "__none__")
+    has_prov  = (prov_codes != "__none__")
     same_prov &= has_prov[:, None] & has_prov[None, :]
     sim[same_prov] = 0.7
 
-    # ── Tier 2: neighbor district ──────────────────────────────
-    dist_neighbor_mask = np.zeros((n, n), dtype=bool)
-    for i, d in enumerate(districts):
-        if not d:
-            continue
+    # ── Tier 2: neighbor district (vectorized) ─────────────────
+    unique_dists = [d for d in set(districts) if d]
+    for d in unique_dists:
         neighbors = DISTRICT_NEIGHBORS.get(d, set())
         if not neighbors:
             continue
-        for j, e in enumerate(districts):
-            if e and e in neighbors:
-                dist_neighbor_mask[i, j] = True
-    sim[dist_neighbor_mask] = 0.55
+        row_mask = (districts == d)
+        col_mask = np.isin(districts, list(neighbors))
+        sim[np.ix_(row_mask, col_mask)] = 0.55
 
     # ── Tier 1: same district ──────────────────────────────────
-    dist_codes = np.array([d if d else "__none__" for d in districts])
+    dist_codes = np.where(
+        np.array([bool(d) for d in districts]),
+        districts,
+        "__none__"
+    )
     same_dist = (dist_codes[:, None] == dist_codes[None, :])
-    has_dist = (dist_codes != "__none__")
+    has_dist  = (dist_codes != "__none__")
     same_dist &= has_dist[:, None] & has_dist[None, :]
     sim[same_dist] = 1.0
 

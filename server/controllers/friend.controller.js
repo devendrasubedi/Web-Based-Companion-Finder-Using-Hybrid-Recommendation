@@ -232,6 +232,40 @@ export const getFriendStatus = async (req, res) => {
     }
 };
 
+// POST /api/friends/status/batch
+export const getBatchFriendStatus = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { targetUserIds } = req.body;
+
+        if (!Array.isArray(targetUserIds)) {
+            return res.status(400).json({ success: false, message: "targetUserIds must be an array" });
+        }
+
+        const statuses = {};
+        await Promise.all(targetUserIds.map(async (targetUserId) => {
+            const result = await UserRelationship.getStatus(userId, targetUserId);
+            
+            let status = "none";
+            if (result.status === "accepted") {
+                status = "friends";
+            } else if (result.status === "pending") {
+                status = result.actionBy?.toString() === userId?.toString()
+                    ? "request_sent"
+                    : "request_received";
+            } else if (result.status === "blocked") {
+                status = "blocked";
+            }
+            statuses[targetUserId] = status;
+        }));
+
+        res.status(200).json({ success: true, statuses });
+    } catch (error) {
+        console.error("Error in getBatchFriendStatus:", error);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
+
 // POST /api/friends/block
 export const blockUser = async (req, res) => {
     try {

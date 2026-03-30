@@ -61,6 +61,7 @@ def compute_user_cf_matrix(interaction_matrix):
     Step 1: sklearn cosine_similarity on sparse matrix.
     Step 2: Zero diagonal.
     Step 3: Zero out pairs with < 3 common trails.
+    Step 4: Top-K cutoff per row.
     """
     if interaction_matrix.shape[0] == 0:
         return np.array([])
@@ -76,6 +77,15 @@ def compute_user_cf_matrix(interaction_matrix):
         binary = (interaction_matrix > 0).astype(float)
         common_counts = (binary @ binary.T).toarray()
         cf_matrix[common_counts < USER_CF_MIN_COMMON_TRAILS] = 0.0
+
+    # Step 4: Top-K cutoff — keep only top USER_CF_K_NEIGHBORS per row
+    n = cf_matrix.shape[0]
+    if n > USER_CF_K_NEIGHBORS:
+        for i in range(n):
+            row = cf_matrix[i]
+            # Indices sorted ascending; take all but the top K, zero them
+            cutoff_indices = np.argsort(row)[:-(USER_CF_K_NEIGHBORS)]
+            row[cutoff_indices] = 0.0
 
     nonzero = (cf_matrix > 0).sum()
     mean_nz = cf_matrix[cf_matrix > 0].mean() if nonzero > 0 else 0

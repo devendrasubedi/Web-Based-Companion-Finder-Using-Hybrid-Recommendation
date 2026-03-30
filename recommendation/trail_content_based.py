@@ -53,7 +53,7 @@ def _trails_to_df(trails):
     return pd.DataFrame(records).set_index("tid")
 
 
-# ── Signal 1: Interest Match (Jaccard per category) ─────────
+# ── Signal 1: Interest Match (Recall-Weighted per category) ──
 
 def _interest_scores(user_interests, trails_df):
     """
@@ -216,33 +216,23 @@ def _build_reasons(user_interests, trails_df, s_interest):
 #  PUBLIC API
 # ═════════════════════════════════════════════════════════���════
 
-def get_trail_cbf_scores(profile, trails):
+def get_trail_cbf_scores_from_df(profile, trails_df):
     """
-    Score ALL trails for one user. Returns {trailId: (score, reasons)}.
-
-    Step 1: Convert trails to DataFrame.
-    Step 2: Compute 6 signal Series (vectorized across all 129 trails).
-    Step 3: Weighted sum.
-    Step 4: Zero out trails that fail hard filters.
-    Step 5: Build reason strings.
-    Step 6: Return only trails with score > 0.
+    Score ALL trails for one user using a pre-built trails DataFrame.
+    Called by the bulk loop so the DataFrame is built only ONCE.
+    Returns {trailId: (score, reasons)}.
     """
-    if not trails:
+    if trails_df is None or trails_df.empty:
         return {}
 
-    # Step 1
-    trails_df = _trails_to_df(trails)
-
-    # Extract user profile fields
-    interests = profile.get("interests", [])
-    fitness = profile.get("experienceLevel", "beginner")
+    interests    = profile.get("interests", [])
+    fitness      = profile.get("experienceLevel", "beginner")
     budget_level = profile.get("budgetLevel", "Medium")
     availability = profile.get("availability", "Flexible")
-    province = profile.get("province", "")
-    district = profile.get("district", "")
-    dob = profile.get("dob")
+    province     = profile.get("province", "")
+    district     = profile.get("district", "")
+    dob          = profile.get("dob")
 
-    # Step 2: Compute all 6 signals
     s_interest     = _interest_scores(interests, trails_df)
     s_difficulty   = _difficulty_scores(fitness, dob, trails_df)
     s_budget       = _budget_scores(budget_level, trails_df)
@@ -250,7 +240,6 @@ def get_trail_cbf_scores(profile, trails):
     s_geo          = _geo_scores(province, district, trails_df)
     s_popularity   = _popularity_scores(trails_df)
 
-    # Step 3: Weighted sum
     total = (
         CBF_WEIGHTS["interest"]       * s_interest
         + CBF_WEIGHTS["difficulty"]   * s_difficulty
@@ -260,19 +249,28 @@ def get_trail_cbf_scores(profile, trails):
         + CBF_WEIGHTS["popularity"]   * s_popularity
     )
 
-    # Step 4: Hard filters — zero out impossible trails
     hard_pass = (s_difficulty > 0) & (s_availability > 0)
     total = total.where(hard_pass, 0.0)
 
-    # Step 5: Reasons
     reasons_map = _build_reasons(interests, trails_df, s_interest)
 
-    # Step 6: Collect results
     scores = {}
     for tid in trails_df.index:
         s = float(total[tid])
         if s > 0:
             scores[tid] = (s, reasons_map.get(tid, []))
 
-    logger.debug(f"Trail CBF scored {len(scores)}/{len(trails)} trails > 0")
+    logger.debug(f"Trail CBF scored {len(scores)}/{len(trails_df)} trails > 0")
     return scores
+
+
+def get_trail_cbf_scores(profile, trails):
+    """
+    Score ALL trails for one user. Returns {trailId: (score, reasons)}.
+    Converts trail list to DataFrame then delegates to get_trail_cbf_scores_from_df.
+    Used by single-user on-demand calls; bulk loop uses get_trail_cbf_scores_from_df.
+    """
+    if not trails:
+        return {}
+    trails_df = _trails_to_df(trails)
+    return get_trail_cbf_scores_from_df(profile, trails_df)
