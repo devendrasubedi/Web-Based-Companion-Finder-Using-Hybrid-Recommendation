@@ -78,3 +78,17 @@ const startServer = async () => {
   }
 }
 startServer()
+
+// Handle server errors such as EADDRINUSE gracefully
+httpServer.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    const nextPort = Number(PORT) + 1;
+    console.warn(`Port ${PORT} in use, attempting to listen on ${nextPort}`);
+    httpServer.listen(nextPort, () => {
+      console.log(`Server listening on port ${nextPort}`);
+    });
+  } else {
+    console.error('HTTP server error:', err);
+    process.exit(1);
+  }
+});

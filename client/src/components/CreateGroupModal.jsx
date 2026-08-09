@@ -1,6 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, MapPin, Calendar, Users, AlertCircle, Mountain, ChevronDown, Sparkles } from 'lucide-react';
 
+const FieldError = ({ field, errors, touched }) => (
+  errors[field] && touched[field] ? (
+    <p className="text-xs text-red-600 flex items-center gap-1 mt-1.5">
+      <AlertCircle size={12} /> {errors[field]}
+    </p>
+  ) : null
+);
+
 export default function CreateGroupModal({ onClose, preselectedTrail = '', availableTrails = [], onSubmit }) {
   const [formData, setFormData] = useState({
     trailName: typeof preselectedTrail === 'string' ? preselectedTrail : (preselectedTrail?.name || ''),
@@ -186,7 +194,7 @@ export default function CreateGroupModal({ onClose, preselectedTrail = '', avail
                   )}
                 </div>
               )}
-              <FieldError field="trailName" />
+              <FieldError field="trailName" errors={errors} touched={touched} />
             </div>
 
             {/* Group Name */}
@@ -207,7 +215,7 @@ export default function CreateGroupModal({ onClose, preselectedTrail = '', avail
                 placeholder="e.g., Sunrise Trek Spring 2026"
                 className={inputClass('name')}
               />
-              <FieldError field="name" />
+              <FieldError field="name" errors={errors} touched={touched} />
             </div>
 
             {/* Description */}
@@ -228,7 +236,7 @@ export default function CreateGroupModal({ onClose, preselectedTrail = '', avail
                 rows="3"
                 className={`${inputClass('description')} resize-none`}
               />
-              <FieldError field="description" />
+              <FieldError field="description" errors={errors} touched={touched} />
             </div>
 
             {/* Date & Difficulty Row */}
@@ -248,7 +256,7 @@ export default function CreateGroupModal({ onClose, preselectedTrail = '', avail
                   min={new Date().toISOString().split('T')[0]}
                   className={inputClass('trekDate')}
                 />
-                <FieldError field="trekDate" />
+                <FieldError field="trekDate" errors={errors} touched={touched} />
               </div>
 
               {/* Max Members */}
@@ -267,7 +275,7 @@ export default function CreateGroupModal({ onClose, preselectedTrail = '', avail
                   max="100"
                   className={inputClass('maxMembers')}
                 />
-                <FieldError field="maxMembers" />
+                <FieldError field="maxMembers" errors={errors} touched={touched} />
               </div>
             </div>
 

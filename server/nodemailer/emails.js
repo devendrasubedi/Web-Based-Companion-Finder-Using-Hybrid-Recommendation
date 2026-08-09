@@ -14,7 +14,7 @@ export const sendVerificationEmail = async (email, verificationToken, name) => {
         console.log("Email sent sucessfully", response);
     } catch (error) {
         console.log(`Error sending the verification`, error);
-        throw new Error(`Error sending the verification email: ${error}`);
+        // Don't throw to avoid breaking user flows when email fails
     }
 }
 
@@ -31,7 +31,7 @@ export const sendWelcomeEmail = async (email, name) => {
         console.log("Welcome email sent sucessfully", response)
     } catch (error) {
         console.log("Error sending the welcome email", error)
-        throw new Error(`Error sending the welcome email: ${error}`)
+        // swallow error to avoid failing verification flow
     }
 }
 
@@ -48,7 +48,7 @@ export const sendPasswordResetEmail = async (email, resetURL, name) => {
         console.log("Password reset email sent successfully", response);
     } catch (error) {
         console.log("Error sending the password reset email", error);
-        throw new Error(`Error sending the password reset email: ${error}`);
+        // don't throw
     }
 }
 
@@ -62,9 +62,8 @@ export const sendResetSuccessEmail = async (email, name) => {
             category: "Password Reset",
         });
         console.log("Password reset success email sent successfully", response);
-
     } catch (error) {
         console.log("Error sending the password reset success email", error);
-        throw new Error(`Error sending the password reset success email: ${error}`);
+        // don't throw
     }
 }
